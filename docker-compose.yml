@@ -1,0 +1,102 @@
+name: delco
+
+x-delco: &delco
+  build: .
+  image: delco:1.0.0
+  restart: unless-stopped
+  init: true
+  environment: &delco-env
+    DELCO_ENVIRONMENT: production
+    DELCO_DATABASE_URL: mysql://${DELCO_DB_USER:-delco}:${DELCO_DB_PASSWORD:?defina DELCO_DB_PASSWORD no arquivo .env}@mysql:3306/${DELCO_DB_NAME:-delco}
+    DELCO_REDIS_URL: redis://redis:6379/0
+    DELCO_SEED: ${DELCO_SEED:-true}
+    DELCO_TIMEZONE: ${DELCO_TIMEZONE:-America/Sao_Paulo}
+    DELCO_RETENTION_DAYS: ${DELCO_RETENTION_DAYS:-30}
+    DELCO_LOG_LEVEL: ${DELCO_LOG_LEVEL:-INFO}
+    DELCO_ALLOWED_HOSTS: ${DELCO_ALLOWED_HOSTS:-*}
+    DELCO_SECRET_KEY: ${DELCO_SECRET_KEY:-}
+  depends_on: &delco-deps
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    environment:
+      MYSQL_USER: ${DELCO_DB_USER:-delco}
+      MYSQL_PASSWORD: ${DELCO_DB_PASSWORD:?defina DELCO_DB_PASSWORD no arquivo .env}
+      MYSQL_DATABASE: ${DELCO_DB_NAME:-delco}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:${DELCO_DB_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$${MYSQL_USER}\" -p\"$${MYSQL_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Django no Daphne: API REST (DRF) + WebSocket (Channels) + painel web. Aplica as migrações ao subir.
+  api:
+    <<: *delco
+    command: ["delco", "api", "--port", "8000"]
+    ports:
+      - "${DELCO_PORT:-8080}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Agendador: lê a pasta workflows/, cria execuções, libera tarefas e recupera falhas.
+  scheduler:
+    <<: *delco
+    command: ["delco", "scheduler"]
+    volumes:
+      - ./workflows:/app/workflows:ro
+    depends_on:
+      <<: *delco-deps
+      api:
+        condition: service_healthy
+
+  # Workers: consomem as filas e executam as tarefas. Escale com --scale worker=N.
+  worker:
+    <<: *delco
+    command: ["delco", "worker"]
+    environment:
+      <<: *delco-env
+      DELCO_WORKER_QUEUES: ${DELCO_WORKER_QUEUES:-default,critical}
+      DELCO_WORKER_CONCURRENCY: ${DELCO_WORKER_CONCURRENCY:-4}
+    volumes:
+      - ./workflows:/app/workflows:ro
+    deploy:
+      replicas: 2
+    stop_grace_period: 45s
+    depends_on:
+      <<: *delco-deps
+      api:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+  redis-data:
