@@ -39,6 +39,7 @@ class Trigger(models.TextChoices):
     MANUAL = "manual", "Painel"
     API = "api", "API"
     CLI = "cli", "CLI"
+    WEBHOOK = "webhook", "Webhook"
 
 
 class WorkerStatus(models.TextChoices):
@@ -71,6 +72,21 @@ class AttemptStatus(models.TextChoices):
     TIMED_OUT = "timed_out", "Tempo esgotado"
     LOST = "lost", "Perdida"
     CANCELLED = "cancelled", "Cancelada"
+
+
+class IntegrationKind(models.TextChoices):
+    SLACK = "slack", "Slack"
+    DISCORD = "discord", "Discord"
+    TEAMS = "teams", "Microsoft Teams"
+    GOOGLE_CHAT = "google_chat", "Google Chat"
+    WEBHOOK = "webhook", "Webhook genérico"
+    TRIGGER = "trigger", "Gatilho por URL"
+
+
+class DeliveryStatus(models.TextChoices):
+    PENDING = "pending", "Pendente"
+    SENT = "sent", "Enviada"
+    FAILED = "failed", "Falhou"
 
 
 class LogLevel(models.TextChoices):
@@ -363,3 +379,76 @@ class TaskLog(models.Model):
         db_table = "task_logs"
         indexes = [models.Index(fields=["attempt", "id"], name="task_logs_attempt_idx")]
         constraints = [models.CheckConstraint(condition=_in("level", LogLevel), name="task_logs_level_check")]
+
+
+# ===================================================================== integrações
+class Integration(models.Model):
+    """Destino de notificações (Slack, Discord, Teams, Google Chat, webhook) ou gatilho de entrada."""
+
+    name = models.CharField(max_length=120)
+    kind = models.CharField(max_length=16, choices=IntegrationKind.choices)
+    url = models.CharField(max_length=1000, null=True, blank=True)
+    secret = models.CharField(max_length=128, null=True, blank=True)
+    token_hash = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    token_prefix = models.CharField(max_length=16, null=True, blank=True)
+    workflow = models.ForeignKey(
+        Workflow, null=True, blank=True, on_delete=models.DB_CASCADE, related_name="integrations"
+    )
+    events = models.JSONField(default=list, db_default=[])
+    workflows = models.JSONField(default=list, db_default=[])
+    is_active = models.BooleanField(default=True, db_default=True)
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.DB_SET_NULL, related_name="integrations"
+    )
+    created_at = models.DateTimeField(default=tz.now, db_default=Now())
+    updated_at = models.DateTimeField(default=tz.now, db_default=Now())
+    last_delivery_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.CharField(max_length=16, null=True, blank=True)
+
+    class Meta:
+        db_table = "integrations"
+        indexes = [models.Index(fields=["is_active"], name="integrations_active_idx")]
+        constraints = [
+            models.CheckConstraint(condition=_in("kind", IntegrationKind), name="integrations_kind_check")
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class IntegrationDelivery(models.Model):
+    """Notificação a enviar. Nasce na mesma transação que muda o estado da execução."""
+
+    integration = models.ForeignKey(
+        Integration, on_delete=models.DB_CASCADE, related_name="deliveries", db_index=False
+    )
+    run = models.ForeignKey(
+        WorkflowRun, null=True, blank=True, on_delete=models.DB_CASCADE, related_name="deliveries"
+    )
+    event = models.CharField(max_length=32)
+    status = models.CharField(
+        max_length=16,
+        choices=DeliveryStatus.choices,
+        default=DeliveryStatus.PENDING,
+        db_default=DeliveryStatus.PENDING,
+    )
+    attempts = models.IntegerField(default=0, db_default=0)
+    next_attempt_at = models.DateTimeField(default=tz.now, db_default=Now())
+    response_code = models.SmallIntegerField(null=True, blank=True)
+    error = models.TextField(null=True, blank=True)
+    payload = models.JSONField()
+    created_at = models.DateTimeField(default=tz.now, db_default=Now())
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "integration_deliveries"
+        indexes = [
+            models.Index(fields=["status", "next_attempt_at"], name="integration_deliveries_due_idx"),
+            models.Index(fields=["integration", "-id"], name="integration_deliveries_int_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=_in("status", DeliveryStatus), name="integration_deliveries_status_check"
+            ),
+            models.CheckConstraint(condition=Q(attempts__gte=0), name="integration_deliveries_attempts_check"),
+        ]

@@ -191,17 +191,56 @@ def _run_row(r: WorkflowRun, now: datetime) -> dict[str, Any]:
     }
 
 
-def list_runs(*, workflow: str | None, status: str | None, page: int, size: int) -> dict[str, Any]:
+def _run_filters(
+    *, workflow: str | None, status: str | None, trigger: str | None = None, since: int | None = None,
+    q: str | None = None,
+) -> Q:
     filters = Q()
     if workflow:
         filters &= Q(workflow__name=workflow)
     if status:
         filters &= Q(status=status)
+    if trigger:
+        filters &= Q(trigger=trigger)
+    if since:
+        filters &= Q(created_at__gte=timezone.now() - timedelta(days=since))
+    if q:
+        term = q.strip().lstrip("#")
+        filters &= Q(id=int(term)) if term.isdigit() else Q(note__icontains=term) | Q(workflow__name__icontains=term)
+    return filters
+
+
+def list_runs(
+    *, workflow: str | None, status: str | None, page: int, size: int, trigger: str | None = None,
+    since: int | None = None, q: str | None = None,
+) -> dict[str, Any]:
+    filters = _run_filters(workflow=workflow, status=status, trigger=trigger, since=since, q=q)
     total = WorkflowRun.objects.filter(filters).count()
     now = timezone.now()
     offset = (page - 1) * size
     items = [_run_row(r, now) for r in _runs().filter(filters).order_by("-id")[offset : offset + size]]
     return {"items": items, "total": total, "page": page, "size": size}
+
+
+EXPORT_COLUMNS = [
+    "id", "workflow", "estado", "origem", "disparada_por", "criada_em", "inicio", "fim", "duracao_ms",
+    "tarefas_total", "tarefas_sucesso", "tarefas_falha", "observacao",
+]
+
+
+def export_runs(*, limit: int = 10000, **filters: Any) -> list[list[Any]]:
+    """Linhas do CSV de execuções (mesmos filtros da listagem), da mais recente para a mais antiga."""
+    now = timezone.now()
+    rows = []
+    for r in _runs().filter(_run_filters(**filters)).order_by("-id")[:limit]:
+        d = _run_row(r, now)
+        iso = lambda v: v.isoformat() if v else ""  # noqa: E731
+        rows.append([
+            d["id"], d["workflow"], d["status"], d["trigger"], d["triggered_by"] or "", iso(d["created_at"]),
+            iso(d["started_at"]), iso(d["finished_at"]), d["duration_ms"] if d["duration_ms"] is not None else "",
+            d["tasks_total"], d["tasks_succeeded"], d["tasks_failed"], d["note"] or "",
+        ])
+    return rows
 
 
 def get_run(run_id: int) -> dict[str, Any] | None:
@@ -442,3 +481,121 @@ def audit_page(page: int, size: int) -> dict[str, Any]:
         for a in AuditLog.objects.select_related("user").order_by("-id")[offset : offset + size]
     ]
     return {"items": items, "total": total, "page": page, "size": size}
+
+
+# ----------------------------------------------------------------- desempenho
+def _pct(values: list[int], p: float) -> int | None:
+    if not values:
+        return None
+    values = sorted(values)
+    k = max(0, min(len(values) - 1, round(p / 100 * (len(values) - 1))))
+    return int(values[k])
+
+
+def insights(days: int) -> dict[str, Any]:
+    """Saúde de cada workflow no período: volume, taxa de sucesso, p50/p95 e tarefas problemáticas."""
+    now = timezone.now()
+    since = now - timedelta(days=days)
+    first_day = timezone.localtime(now).date() - timedelta(days=days - 1)
+    runs = list(
+        WorkflowRun.objects.filter(finished_at__gte=since, status__in=("succeeded", "failed", "cancelled"))
+        .values_list("workflow__name", "status", "started_at", "finished_at")[:50000]
+    )
+    per: dict[str, dict[str, Any]] = {}
+    for name, status, started, finished in runs:
+        w = per.setdefault(name, {"workflow": name, "runs": 0, "succeeded": 0, "failed": 0, "cancelled": 0,
+                                  "durations": [], "daily": {}})
+        w["runs"] += 1
+        w[status] += 1
+        if started and finished:
+            w["durations"].append(int((finished - started).total_seconds() * 1000))
+        day = timezone.localtime(finished).date()
+        cell = w["daily"].setdefault(day, [0, 0])
+        cell[0 if status == "succeeded" else 1] += 1
+    for wf in Workflow.objects.filter(is_active=True).values_list("name", flat=True):
+        per.setdefault(wf, {"workflow": wf, "runs": 0, "succeeded": 0, "failed": 0, "cancelled": 0,
+                            "durations": [], "daily": {}})
+    workflows = []
+    for w in per.values():
+        days_list = [first_day + timedelta(days=i) for i in range(days)]
+        decided = w["succeeded"] + w["failed"]
+        workflows.append({
+            "workflow": w["workflow"],
+            "runs": w["runs"],
+            "succeeded": w["succeeded"],
+            "failed": w["failed"],
+            "cancelled": w["cancelled"],
+            "success_rate": round(100 * w["succeeded"] / decided, 1) if decided else None,
+            "p50_ms": _pct(w["durations"], 50),
+            "p95_ms": _pct(w["durations"], 95),
+            "daily": [{"day": d.isoformat(), "succeeded": w["daily"].get(d, [0, 0])[0],
+                       "failed": w["daily"].get(d, [0, 0])[1]} for d in days_list],
+        })
+    workflows.sort(key=lambda w: (-w["runs"], w["workflow"]))
+
+    attempts = TaskAttempt.objects.filter(finished_at__gte=since)
+    failing = list(
+        attempts.filter(status__in=FAILED_ATTEMPT)
+        .values(workflow=F("task_instance__run__workflow__name"), task=F("task_instance__task_name"))
+        .annotate(failures=Count("id"))
+        .order_by("-failures")[:8]
+    )
+    for f in failing:
+        last = (
+            attempts.filter(status__in=FAILED_ATTEMPT, task_instance__task_name=f["task"],
+                            task_instance__run__workflow__name=f["workflow"])
+            .order_by("-id").values("error", "task_instance__run_id").first()
+        ) or {}
+        f["last_error"] = (last.get("error") or "")[:200]
+        f["last_run_id"] = last.get("task_instance__run_id")
+    durations: dict[tuple[str, str], list[int]] = {}
+    for wf, task, ms in attempts.filter(status="succeeded", duration_ms__isnull=False).values_list(
+        "task_instance__run__workflow__name", "task_instance__task_name", "duration_ms"
+    )[:100000]:
+        durations.setdefault((wf, task), []).append(ms)
+    slowest = sorted(
+        ({"workflow": wf, "task": task, "count": len(v), "p95_ms": _pct(v, 95), "avg_ms": round(sum(v) / len(v))}
+         for (wf, task), v in durations.items()),
+        key=lambda x: -(x["p95_ms"] or 0),
+    )[:8]
+    totals_attempts = attempts.aggregate(
+        failed=Count("id", filter=Q(status__in=FAILED_ATTEMPT)),
+        processing=Coalesce(Sum("duration_ms"), 0),
+    )
+    succeeded = sum(w["succeeded"] for w in workflows)
+    failed = sum(w["failed"] for w in workflows)
+    return {
+        "days": days,
+        "totals": {
+            "runs": sum(w["runs"] for w in workflows),
+            "succeeded": succeeded,
+            "failed": failed,
+            "success_rate": round(100 * succeeded / (succeeded + failed), 1) if succeeded + failed else None,
+            "failed_attempts": totals_attempts["failed"],
+            "processing_ms": totals_attempts["processing"],
+        },
+        "workflows": workflows,
+        "failing_tasks": failing,
+        "slowest_tasks": slowest,
+    }
+
+
+# --------------------------------------------------------- próximas execuções
+def upcoming(hours: int, limit: int = 60) -> list[dict[str, Any]]:
+    """Horários agendados nas próximas ``hours`` horas, de todos os workflows ativos."""
+    from ..schedule import next_fire
+
+    now = timezone.now()
+    end = now + timedelta(hours=hours)
+    out: list[dict[str, Any]] = []
+    for wf in Workflow.objects.filter(is_active=True, is_paused=False, schedule__isnull=False).only(
+        "name", "schedule", "timezone", "next_run_at", "current_version"
+    ):
+        at = wf.next_run_at or next_fire(wf.schedule, wf.timezone, now)
+        count = 0
+        while at and at <= end and count < 48:
+            out.append({"workflow": wf.name, "at": at, "schedule_text": describe(wf.schedule)})
+            at = next_fire(wf.schedule, wf.timezone, at)
+            count += 1
+    out.sort(key=lambda x: (x["at"], x["workflow"]))
+    return out[:limit]

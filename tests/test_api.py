@@ -41,7 +41,7 @@ def test_saude_e_painel(client):
         "status": "ok",
         "database": True,
         "redis": True,
-        "version": "1.0.0",
+        "version": "1.1.0",
     }
     page = client.get("/")
     assert page.status_code == 200 and "Delco" in page.text

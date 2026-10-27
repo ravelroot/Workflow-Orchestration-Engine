@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "delco"
-version = "1.0.0"
+version = "1.1.0"
 description = "Motor de orquestração de workflows: pipelines como código, agendamento, fila com workers, retentativas e retomada após falhas."
 readme = "README.md"
 license = "MIT"

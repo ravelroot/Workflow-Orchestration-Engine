@@ -55,6 +55,21 @@ export async function api(method, path, body) {
 }
 
 export const get = (p) => api("GET", p);
+
+// Baixa uma resposta que não é JSON (CSV) com o token da sessão.
+export async function download(path, filename) {
+  const res = await fetch(`/api${path}`, { headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 export const post = (p, b) => api("POST", p, b ?? {});
 
 export async function login(email, password) {

@@ -57,6 +57,23 @@ const PATHS = {
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   alert: '<path d="M12 4l9 16H3zM12 10v4M12 17h.01"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.4 4.2-6.5 8-6.5s7 2.1 8 6.5"/>',
+  insights: '<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 6-7"/><circle cx="20" cy="6" r="1"/>',
+  plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7 14h10"/>',
+  bell: '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 21h4"/>',
+  hash: '<path d="M5 9h15M4 15h15M10 3L8 21M16 3l-2 18"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/>',
+  team: '<circle cx="8" cy="9" r="3"/><circle cx="16.5" cy="8" r="2.5"/><path d="M2.5 19c.7-3.2 2.9-5 5.5-5s4.8 1.8 5.5 5M14 13.3c.8-.4 1.6-.6 2.5-.6 2.3 0 4.2 1.6 4.8 4.3"/>',
+  message: '<path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/>',
+  braces: '<path d="M8 4c-2 0-3 1-3 3v2c0 1.5-.8 2.5-2 3 1.2.5 2 1.5 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1.5.8 2.5 2 3-1.2.5-2 1.5-2 3v2c0 2-1 3-3 3"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"/>',
+  send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
+  enter: '<path d="M20 5v7a3 3 0 0 1-3 3H5M9 11l-4 4 4 4"/>',
+  arrows: '<path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/>',
 };
 
 export function icon(name, size = 18) {
@@ -135,7 +152,7 @@ export const STATUS = {
   skipped: "Pulada",
   cancelled: "Cancelada",
 };
-export const TRIGGER = { schedule: "Agendada", manual: "Painel", api: "API", cli: "CLI" };
+export const TRIGGER = { schedule: "Agendada", manual: "Painel", api: "API", cli: "CLI", webhook: "Webhook" };
 export const ROLE = { admin: "Administrador", operator: "Operador", viewer: "Leitura" };
 export const ATTEMPT = {
   running: "Rodando", succeeded: "Sucesso", failed: "Falhou", timed_out: "Tempo esgotado", lost: "Worker caiu", cancelled: "Cancelada",
@@ -160,7 +177,7 @@ export function toast(message, kind = "ok") {
   setTimeout(() => el.remove(), kind === "error" ? 6000 : 3500);
 }
 
-export function modal(build) {
+export function modal(build, { wide = false, bare = false } = {}) {
   const prev = document.activeElement;
   const close = () => {
     overlay.remove();
@@ -168,7 +185,7 @@ export function modal(build) {
     prev?.focus?.();
   };
   const onKey = (e) => e.key === "Escape" && close();
-  const box = h("div", { class: "modal", role: "dialog", "aria-modal": "true" });
+  const box = h("div", { class: bare ? "" : `modal${wide ? " wide" : ""}`, role: "dialog", "aria-modal": "true" });
   const overlay = h("div", { class: "overlay", onmousedown: (e) => e.target === overlay && close() }, box);
   build(box, close);
   document.body.append(overlay);
@@ -251,8 +268,22 @@ export function debounce(fn, ms = 300) {
   };
 }
 
-export function empty(title, text) {
-  return h("div", { class: "empty" }, h("strong", {}, title), text ? h("p", {}, text) : null);
+export function empty(title, text, action = null) {
+  return h("div", { class: "empty" }, h("strong", {}, title), text ? h("p", {}, text) : null, action);
+}
+
+export function downloadText(filename, text, type = "text/plain;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = h("a", { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function rateClass(rate) {
+  if (rate === null || rate === undefined) return "";
+  return rate >= 95 ? "good" : rate >= 80 ? "mid" : "bad";
 }
 
 export function escapeHtml(s) {

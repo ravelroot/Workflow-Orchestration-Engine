@@ -45,6 +45,8 @@ from delco.scheduler import Scheduler  # noqa: E402
 from delco.worker import Worker  # noqa: E402
 
 TABLES = (
+    "integration_deliveries",
+    "integrations",
     "task_logs",
     "task_attempts",
     "task_instances",

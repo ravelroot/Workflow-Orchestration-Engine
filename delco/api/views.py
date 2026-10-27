@@ -6,9 +6,11 @@ As views são finas: validam a entrada com serializers, chamam ``store``,
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -16,15 +18,18 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from .. import __version__, accounts, store
+from .. import __version__, accounts, integrations, store
 from ..bus import get_bus
 from ..config import get_settings
 from ..db import ping
 from . import queries
 from .auth import IsAdmin, IsOperator, IsViewer
-from .errors import not_found
+from .errors import ApiError, not_found
 from .serializers import (
     GridQuerySerializer,
+    HookSerializer,
+    InsightsQuerySerializer,
+    IntegrationSerializer,
     LoginSerializer,
     LogsQuerySerializer,
     PageSerializer,
@@ -33,6 +38,7 @@ from .serializers import (
     RunsQuerySerializer,
     TokenSerializer,
     TriggerSerializer,
+    UpcomingQuerySerializer,
     UserCreateSerializer,
     UserPatchSerializer,
     valid,
@@ -256,6 +262,9 @@ def load_errors(request: Request) -> Response:
     parameters=[
         _q("workflow", OpenApiTypes.STR),
         _q("status", OpenApiTypes.STR, "queued | running | succeeded | failed | cancelled"),
+        _q("trigger", OpenApiTypes.STR, "schedule | manual | api | cli | webhook"),
+        _q("since", OpenApiTypes.INT, "Só as criadas nos últimos N dias"),
+        _q("q", OpenApiTypes.STR, "Número (#118), observação ou parte do nome"),
         _q("page"),
         _q("size"),
     ],
@@ -266,9 +275,36 @@ def load_errors(request: Request) -> Response:
 @permission_classes([IsViewer])
 def runs(request: Request) -> Response:
     q = valid(RunsQuerySerializer, request.query_params)
-    return Response(
-        queries.list_runs(workflow=q.get("workflow"), status=q.get("status"), page=q["page"], size=q["size"])
-    )
+    return Response(queries.list_runs(**_run_filters(q), page=q["page"], size=q["size"]))
+
+
+def _run_filters(q: dict) -> dict:
+    return {k: q.get(k) or None for k in ("workflow", "status", "trigger", "since", "q")}
+
+
+@extend_schema(
+    tags=["execuções"],
+    parameters=[
+        _q("workflow", OpenApiTypes.STR),
+        _q("status", OpenApiTypes.STR),
+        _q("trigger", OpenApiTypes.STR),
+        _q("since", OpenApiTypes.INT),
+        _q("q", OpenApiTypes.STR),
+    ],
+    responses={(200, "text/csv"): OpenApiTypes.STR},
+    summary="Exportar execuções em CSV",
+)
+@api_view(["GET"])
+@permission_classes([IsViewer])
+def export_runs(request: Request) -> HttpResponse:
+    q = valid(RunsQuerySerializer, request.query_params)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(queries.EXPORT_COLUMNS)
+    writer.writerows(queries.export_runs(**_run_filters(q)))
+    resp = HttpResponse("\ufeff" + buf.getvalue(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="execucoes-delco.csv"'
+    return resp
 
 
 @extend_schema(tags=["execuções"], responses=OBJ, summary="Execução com suas tarefas")
@@ -370,3 +406,127 @@ def queues(request: Request) -> Response:
 
 def _raise(exc: Exception):
     raise exc
+
+
+# --------------------------------------------------------------- desempenho
+@extend_schema(tags=["monitoramento"], parameters=[_q("days", OpenApiTypes.INT, "7 ou 30")], responses=OBJ,
+               summary="Desempenho por workflow e tarefas problemáticas")
+@api_view(["GET"])
+@permission_classes([IsViewer])
+def insights(request: Request) -> Response:
+    q = valid(InsightsQuerySerializer, request.query_params)
+    return Response(queries.insights(int(q["days"])))
+
+
+@extend_schema(tags=["monitoramento"], parameters=[_q("hours", OpenApiTypes.INT, "1 a 168")], responses=OBJ,
+               summary="Próximas execuções agendadas")
+@api_view(["GET"])
+@permission_classes([IsViewer])
+def upcoming(request: Request) -> Response:
+    q = valid(UpcomingQuerySerializer, request.query_params)
+    return Response(queries.upcoming(q["hours"]))
+
+
+# --------------------------------------------------------------- integrações
+def _integration_or_404(integration_id: int):
+    from ..models import Integration
+
+    integ = Integration.objects.select_related("workflow", "created_by").filter(id=integration_id).first()
+    if integ is None:
+        raise not_found("Integração")
+    return integ
+
+
+def _integration_error(exc: integrations.IntegrationError) -> ApiError:
+    return ApiError(422, "validation_error", "Confira os campos destacados.", exc.fields)
+
+
+@extend_schema(tags=["integrações"], methods=["GET"], responses=OBJ, summary="Listar integrações")
+@extend_schema(tags=["integrações"], methods=["POST"], request=IntegrationSerializer, responses={201: OBJ},
+               summary="Criar integração (Slack, Discord, Teams, Google Chat, webhook ou gatilho por URL)")
+@api_view(["GET", "POST"])
+@permission_classes([IsOperator])
+def integrations_view(request: Request) -> Response:
+    if request.method == "GET":
+        return Response(integrations.list_all())
+    if not IsAdmin().has_permission(request, None):
+        raise ApiError(403, "forbidden", "Só administradores criam integrações.")
+    data = valid(IntegrationSerializer, request.data)
+    try:
+        integ, token = integrations.create(data, user_id=request.user.id)
+    except integrations.IntegrationError as exc:
+        raise _integration_error(exc) from None
+    body = integrations.as_dict(_integration_or_404(integ.id))
+    if token:
+        body["token"] = token
+        body["hook_url"] = f"{get_settings().public_url.rstrip('/')}/api/hooks/{token}"
+    return Response(body, status=201)
+
+
+@extend_schema(tags=["integrações"], methods=["GET"], responses=OBJ, summary="Detalhe da integração")
+@extend_schema(tags=["integrações"], methods=["PATCH"], request=IntegrationSerializer, responses=OBJ,
+               summary="Alterar integração")
+@extend_schema(tags=["integrações"], methods=["DELETE"], responses={204: None}, summary="Excluir integração")
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsOperator])
+def integration(request: Request, integration_id: int) -> Response:
+    integ = _integration_or_404(integration_id)
+    if request.method == "GET":
+        return Response(integrations.as_dict(integ))
+    if not IsAdmin().has_permission(request, None):
+        raise ApiError(403, "forbidden", "Só administradores alteram integrações.")
+    if request.method == "DELETE":
+        integrations.delete(integ, user_id=request.user.id)
+        return Response(status=204)
+    data = valid(IntegrationSerializer, request.data)
+    try:
+        integrations.update(integ, {k: v for k, v in data.items() if k in request.data}, user_id=request.user.id)
+    except integrations.IntegrationError as exc:
+        raise _integration_error(exc) from None
+    return Response(integrations.as_dict(_integration_or_404(integration_id)))
+
+
+@extend_schema(tags=["integrações"], request=None, responses=OBJ, summary="Enviar mensagem de teste")
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def integration_test(request: Request, integration_id: int) -> Response:
+    integ = _integration_or_404(integration_id)
+    try:
+        d = integrations.send_test(integ, user_id=request.user.id)
+    except integrations.IntegrationError as exc:
+        raise _integration_error(exc) from None
+    return Response({"id": d.id, "status": d.status, "response_code": d.response_code, "error": d.error})
+
+
+@extend_schema(tags=["integrações"], responses=OBJ, summary="Histórico de entregas")
+@api_view(["GET"])
+@permission_classes([IsOperator])
+def integration_deliveries(request: Request, integration_id: int) -> Response:
+    _integration_or_404(integration_id)
+    return Response(integrations.deliveries(integration_id))
+
+
+@extend_schema(tags=["integrações"], request=HookSerializer, responses={201: OBJ}, auth=[],
+               summary="Gatilho por URL: dispara o workflow ligado ao token")
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def hook(request: Request, token: str) -> Response:
+    integ = integrations.resolve_token(token)
+    if integ is None or integ.workflow is None:
+        raise ApiError(404, "not_found", "Gatilho não encontrado ou desativado.")
+    data = valid(HookSerializer, request.data if isinstance(request.data, dict) else {})
+    try:
+        run_id = store.trigger_run(
+            integ.workflow.name, params=data["params"], trigger="webhook", note=data.get("note") or f"Gatilho: {integ.name}"
+        )
+    except LookupError:
+        raise not_found("Workflow") from None
+    from ..models import Integration
+    from ..schedule import utcnow
+
+    Integration.objects.filter(id=integ.id).update(last_delivery_at=utcnow(), last_status="sent")
+    bus = get_bus()
+    bus.publish("run", id=run_id, status="queued", workflow=integ.workflow.name)
+    bus.wake()
+    return Response({"id": run_id, "status": "queued", "workflow": integ.workflow.name}, status=201)

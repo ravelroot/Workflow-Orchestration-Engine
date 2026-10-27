@@ -1,6 +1,9 @@
 // Ponto de entrada: rotas, estrutura da página, entrada e tema.
 import { ApiError, can, get, getSession, live, login, logout, onAuthChange, post } from "./api.js";
 import { brand, clear, h, icon, initials, mark, modal, ROLE, toast } from "./ui.js";
+import { insightsPage } from "./pages/insights.js";
+import { integrationsPage } from "./pages/integrations.js";
+import { openPalette, openShortcuts, installShortcuts } from "./palette.js";
 import { overviewPage } from "./pages/overview.js";
 import { workflowPage, workflowsPage } from "./pages/workflows.js";
 import { runPage, runsPage } from "./pages/runs.js";
@@ -26,7 +29,7 @@ function applyTheme(theme) {
   return t;
 }
 applyTheme(savedTheme());
-function toggleTheme() {
+export function toggleTheme() {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   try {
     localStorage.setItem(THEME_KEY, next);
@@ -45,6 +48,8 @@ const ROUTES = [
   { re: /^\/runs$/, page: runsPage, nav: "runs" },
   { re: /^\/runs\/(\d+)$/, page: runPage, nav: "runs" },
   { re: /^\/workers$/, page: workersPage, nav: "workers" },
+  { re: /^\/insights$/, page: insightsPage, nav: "insights" },
+  { re: /^\/integrations$/, page: integrationsPage, nav: "integrations", role: "operator" },
   { re: /^\/account$/, page: accountPage, nav: "account" },
   { re: /^\/users$/, page: usersPage, nav: "users", role: "admin" },
 ];
@@ -90,8 +95,9 @@ function route() {
 // ---------------------------------------------------------------- estrutura
 function sidebar(active) {
   const user = getSession().user;
-  const link = (key, href, label, ic) =>
-    h("a", { href, class: active === key ? "active" : "", "aria-current": active === key ? "page" : null }, icon(ic), label);
+  const link = (key, href, label, ic, keys) =>
+    h("a", { href, class: active === key ? "active" : "", "aria-current": active === key ? "page" : null, title: label },
+      icon(ic), h("span", { class: "txt" }, label), keys ? h("span", { class: "kbd-hint", "aria-hidden": "true" }, keys) : null);
   const liveEl = h("span", { class: "live" }, h("span", { class: "dot" }), "Conectando…");
   cleanup.push(live.onStatus((on) => {
     liveEl.classList.toggle("on", on);
@@ -101,17 +107,21 @@ function sidebar(active) {
     h("span", { class: "avatar" }, initials(user.name)),
     h("span", { class: "who" }, h("span", { class: "small strong ellipsis" }, user.name), h("span", { class: "tiny muted" }, ROLE[user.role])),
     icon("chevron", 16));
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   return h("aside", { class: "sidebar" },
     brand(),
     h("div", { class: "sidebar-tag" }, "Orquestração de workflows"),
+    h("button", { class: "palette-trigger", onclick: () => openPalette() }, icon("search", 15), "Buscar ou ir para…", h("kbd", {}, mac ? "⌘K" : "Ctrl K")),
     h("nav", { class: "nav", "aria-label": "Principal" },
-      link("overview", "#/", "Visão geral", "overview"),
-      link("workflows", "#/workflows", "Workflows", "workflows"),
-      link("runs", "#/runs", "Execuções", "runs"),
-      link("workers", "#/workers", "Workers", "workers")),
-    h("hr"),
-    h("nav", { class: "nav" },
-      h("a", { href: "/api/docs", target: "_blank", rel: "noopener" }, icon("api"), "Documentação da API")),
+      link("overview", "#/", "Visão geral", "overview", "g v"),
+      link("workflows", "#/workflows", "Workflows", "workflows", "g w"),
+      link("runs", "#/runs", "Execuções", "runs", "g e"),
+      link("workers", "#/workers", "Workers", "workers", "g k"),
+      link("insights", "#/insights", "Desempenho", "insights", "g d")),
+    h("div", { class: "nav-label" }, "Conexões"),
+    h("nav", { class: "nav", "aria-label": "Conexões" },
+      can("operator") ? link("integrations", "#/integrations", "Integrações", "plug", "g i") : null,
+      h("a", { href: "/api/docs", target: "_blank", rel: "noopener" }, icon("api"), h("span", { class: "txt" }, "Documentação da API"), icon("external", 13))),
     h("div", { class: "sidebar-foot" },
       liveEl,
       h("button", { class: "btn ghost sm", onclick: toggleTheme }, icon(document.documentElement.dataset.theme === "dark" ? "sun" : "moon", 15),
@@ -124,6 +134,7 @@ function openUserMenu(anchor) {
   const r = anchor.getBoundingClientRect();
   const menu = h("div", { class: "menu", role: "menu", style: { left: `${r.left}px`, bottom: `${innerHeight - r.top + 6}px`, width: `${Math.max(220, r.width)}px` } },
     h("a", { href: "#/account", role: "menuitem" }, icon("key", 16), "Minha conta e tokens"),
+    h("button", { role: "menuitem", onclick: () => openShortcuts() }, icon("keyboard", 16), "Atalhos de teclado"),
     can("admin") ? h("a", { href: "#/users", role: "menuitem" }, icon("users", 16), "Usuários e auditoria") : null,
     h("hr"),
     h("button", { role: "menuitem", onclick: async () => { await logout(); toast("Sessão encerrada"); } }, icon("logout", 16), "Sair"));
@@ -168,22 +179,27 @@ function renderLogin() {
   h("div", { class: "field" }, h("label", { for: "email" }, "E-mail"), email),
   h("div", { class: "field" }, h("label", { for: "senha" }, "Senha"), password),
   err, submit);
-  const pattern = mark("pattern", "#fff");
+  const stops = ["ok", "ok", "retry", "run", "", "", "", ""];
+  const track = h("div", { class: "signal-track", "aria-hidden": "true" },
+    h("div", { class: "track-row" }, stops.map((st, i) => [
+      i ? h("span", { class: `rail${stops[i - 1] === "ok" || stops[i - 1] === "retry" ? " done" : ""}` }) : null,
+      h("span", { class: `stop ${st}` })])),
+    h("div", { class: "track-caption" }, h("span", {}, "passo_20"), h("span", {}, "passo_23 · retomando"), h("span", {}, "passo_27")));
   clear(app, h("div", { class: "login" },
     h("section", { class: "login-art" },
-      mark("big-mark", "#fff"),
+      mark("big-mark"),
       h("div", { class: "stack lg" },
         h("h1", {}, "Workflows que retomam de onde pararam."),
-        h("p", {}, "Agende pipelines escritos em Python, distribua as tarefas entre workers e acompanhe cada passo em tempo real. Se um servidor cair no passo 23 de 50, o Delco continua do passo 23.")),
-      h("div", { class: "foot" }, h("span", {}, "MySQL"), h("span", {}, "Redis Streams"), h("span", {}, "WebSockets"), h("span", {}, "Python")),
-      pattern),
+        h("p", {}, "Agende pipelines escritos em Python, distribua as tarefas entre workers e acompanhe cada passo em tempo real. Se um servidor cair no passo 23 de 50, o Delco continua do passo 23."),
+        track),
+      h("div", { class: "foot" }, h("span", {}, "MySQL"), h("span", {}, "Redis Streams"), h("span", {}, "WebSockets"), h("span", {}, "Slack, Discord, Teams e webhooks"))),
     h("section", { class: "login-panel" },
       h("div", { class: "login-box" },
-        brand(),
+        h("div", { class: "brand" }, h("span", { class: "brand-mark" }, mark()), h("span", { class: "brand-name" }, "Delco")),
         h("div", { class: "stack sm" }, h("h2", {}, "Entrar"), h("p", { class: "muted small" }, "Use sua conta ou uma das contas de demonstração.")),
         form,
         h("div", { class: "demo" },
-          h("span", { class: "label muted" }, "Contas de demonstração · senha Delco@2026"),
+          h("span", { class: "label muted" }, "Contas de demonstração (senha Delco@2026)"),
           DEMO.map(([e, n, r]) => h("button", { type: "button", onclick: () => { email.value = e; password.value = "Delco@2026"; submit.focus(); } },
             h("span", { class: "avatar" }, initials(n)),
             h("span", { class: "who" }, h("strong", {}, n), h("span", { class: "muted tiny" }, `${r} · ${e}`)))))))));
@@ -254,4 +270,5 @@ onAuthChange((s) => {
   if (!s) route();
 });
 window.addEventListener("hashchange", route);
+installShortcuts({ navigate, toggleTheme, isLogged: () => !!getSession() });
 route();

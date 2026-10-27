@@ -130,7 +130,7 @@ SPECTACULAR_SETTINGS = {
         "API do Delco, motor de orquestração de workflows. Autentique com `Authorization: Bearer <token>`: "
         "use o token de sessão devolvido por `POST /api/auth/login` ou um token pessoal criado no painel."
     ),
-    "VERSION": "1.0.0",
+    "VERSION": "1.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
     "SERVE_AUTHENTICATION": [],

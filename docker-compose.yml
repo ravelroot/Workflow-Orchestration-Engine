@@ -2,7 +2,7 @@ name: delco
 
 x-delco: &delco
   build: .
-  image: delco:1.0.0
+  image: delco:1.1.0
   restart: unless-stopped
   init: true
   environment: &delco-env
@@ -15,6 +15,8 @@ x-delco: &delco
     DELCO_LOG_LEVEL: ${DELCO_LOG_LEVEL:-INFO}
     DELCO_ALLOWED_HOSTS: ${DELCO_ALLOWED_HOSTS:-*}
     DELCO_SECRET_KEY: ${DELCO_SECRET_KEY:-}
+    DELCO_PUBLIC_URL: ${DELCO_PUBLIC_URL:-http://localhost:8080}
+    DELCO_WEBHOOK_TIMEOUT: ${DELCO_WEBHOOK_TIMEOUT:-10}
   depends_on: &delco-deps
     mysql:
       condition: service_healthy

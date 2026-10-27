@@ -15,7 +15,7 @@ from pathlib import Path
 
 from django.db import connection
 
-from . import store
+from . import integrations, store
 from .bus import Bus
 from .config import Settings
 from .db import release
@@ -25,6 +25,7 @@ log = logging.getLogger("delco.scheduler")
 
 HOUSEKEEPING_LOCK = "delco:housekeeping"
 HOUSEKEEPING_EVERY = 600.0
+DELIVERY_EVERY = 2.0
 
 
 class Scheduler:
@@ -113,6 +114,14 @@ class Scheduler:
             self.bus.wake()
         return {"expired": len(expired), "republished": republished, "offline": offline}
 
+    def deliver(self) -> dict:
+        """Envia as notificações pendentes das integrações (fora de qualquer transação)."""
+        try:
+            return integrations.deliver_due()
+        except Exception as exc:  # pragma: no cover - rede ou banco instáveis não derrubam o agendador
+            log.warning("Falha ao enviar notificações: %s", exc)
+            return {"sent": 0, "failed": 0, "retry": 0}
+
     def housekeeping(self) -> dict | None:
         """Limpeza periódica; a trava nomeada (GET_LOCK) garante um agendador por vez."""
         with connection.cursor() as cur:
@@ -146,7 +155,7 @@ class Scheduler:
             except Exception:
                 log.exception("Não foi possível criar o histórico de demonstração")
         last_sync = last_recovery = time.monotonic()
-        last_housekeeping = 0.0
+        last_housekeeping = last_delivery = 0.0
         while not self.stop_event.is_set():
             now = time.monotonic()
             try:
@@ -157,6 +166,9 @@ class Scheduler:
                 if now - last_recovery >= self.settings.recovery_seconds:
                     last_recovery = now
                     self.recover()
+                if now - last_delivery >= DELIVERY_EVERY:
+                    last_delivery = now
+                    self.deliver()
                 if now - last_housekeeping >= HOUSEKEEPING_EVERY:
                     last_housekeeping = now
                     self.housekeeping()

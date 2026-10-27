@@ -242,6 +242,10 @@ def cmd_runs(args: argparse.Namespace) -> int:
         query["workflow"] = args.workflow
     if args.status:
         query["status"] = args.status
+    if getattr(args, "trigger", None):
+        query["trigger"] = args.trigger
+    if getattr(args, "since", None):
+        query["since"] = args.since
     page = client_from(args).request("GET", "/api/runs", params=query)
     rows = [
         {
@@ -268,6 +272,55 @@ def cmd_runs(args: argparse.Namespace) -> int:
         )
     )
     print(f"\n{len(rows)} de {page['total']} execuções.")
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    query = {k: v for k, v in (("workflow", args.workflow), ("status", args.status), ("since", args.since)) if v}
+    client = client_from(args)
+    try:
+        response = client.http.get("/api/runs/export", params=query)
+    except httpx.HTTPError as exc:
+        raise SystemExit(f"Não foi possível falar com {client.url}: {exc}") from None
+    if response.status_code >= 400:
+        raise SystemExit(f"Erro {response.status_code}: {response.text[:200]}")
+    with open(args.file, "wb") as fh:
+        fh.write(response.content)
+    lines = max(0, response.content.count(b"\n") - 1)
+    print(f"{lines} execução(ões) exportada(s) para {args.file}")
+    return 0
+
+
+def cmd_upcoming(args: argparse.Namespace) -> int:
+    rows = client_from(args).request("GET", "/api/upcoming", params={"hours": args.hours})
+    if not rows:
+        print(f"Nenhuma execução agendada nas próximas {args.hours} h.")
+        return 0
+    for r in rows:
+        r["quando"] = short_time(r["at"])
+    print(table(rows, [("quando", "QUANDO (UTC)"), ("workflow", "WORKFLOW"), ("schedule_text", "AGENDA")]))
+    return 0
+
+
+KINDS_PT = {
+    "slack": "Slack", "discord": "Discord", "teams": "Microsoft Teams", "google_chat": "Google Chat",
+    "webhook": "Webhook", "trigger": "Gatilho por URL",
+}
+
+
+def cmd_integrations(args: argparse.Namespace) -> int:
+    rows = client_from(args).request("GET", "/api/integrations")
+    if not rows:
+        print("Nenhuma integração cadastrada. Crie em Integrações, no painel.")
+        return 0
+    for r in rows:
+        r["tipo"] = KINDS_PT.get(r["kind"], r["kind"])
+        r["ativa"] = "sim" if r["is_active"] else "não"
+        r["destino"] = r["workflow"] or r["url"] or ""
+        r["eventos"] = ", ".join(e.removeprefix("run.") for e in r["events"]) or "—"
+        r["entregas"] = f"{r['stats']['sent']} ok · {r['stats']['failed']} falha"
+    print(table(rows, [("id", "#"), ("name", "NOME"), ("tipo", "TIPO"), ("ativa", "ATIVA"),
+                       ("destino", "DESTINO"), ("eventos", "EVENTOS"), ("entregas", "ENTREGAS")]))
     return 0
 
 
@@ -504,6 +557,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = client_cmd("runs", "lista execuções", cmd_runs)
     s.add_argument("--workflow")
     s.add_argument("--status", choices=["queued", "running", "succeeded", "failed", "cancelled"])
+    s.add_argument("--trigger", choices=["schedule", "manual", "api", "cli", "webhook"], help="origem")
+    s.add_argument("--since", type=int, help="só as criadas nos últimos N dias")
     s.add_argument("--limit", type=int, default=20)
     s = client_cmd("run", "mostra uma execução e suas tarefas", cmd_run)
     s.add_argument("run_id", type=int)
@@ -522,6 +577,14 @@ def build_parser() -> argparse.ArgumentParser:
     s = client_cmd("resume", "retoma o agendamento de um workflow", lambda a: cmd_pause(a, False))
     s.add_argument("workflow")
     client_cmd("workers", "lista os workers", cmd_workers)
+    s = client_cmd("export", "exporta execuções para CSV", cmd_export)
+    s.add_argument("file", help="arquivo de saída, ex.: execucoes.csv")
+    s.add_argument("--workflow")
+    s.add_argument("--status", choices=["queued", "running", "succeeded", "failed", "cancelled"])
+    s.add_argument("--since", type=int, help="só as criadas nos últimos N dias")
+    s = client_cmd("upcoming", "lista as próximas execuções agendadas", cmd_upcoming)
+    s.add_argument("--hours", type=int, default=24)
+    client_cmd("integrations", "lista as integrações", cmd_integrations)
     return p
 
 

@@ -30,10 +30,12 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce, Now
 
+from . import integrations
 from .loader import LoadResult
 from .models import (
     ApiToken,
     AuditLog,
+    IntegrationDelivery,
     TaskAttempt,
     TaskInstance,
     TaskLog,
@@ -253,6 +255,7 @@ def promote_runs() -> list[int]:
                 status="running", started_at=Coalesce("started_at", Now()), updated_at=Now()
             )
             started.extend(ids)
+        integrations.enqueue(started, "run.started")
     return started
 
 
@@ -347,9 +350,11 @@ def dispatch(now: datetime | None = None) -> DispatchResult:
                 )
             if all(s in TERMINAL_TASK for s in status.values()):
                 outcome = run_outcome(list(status.values()))
-                WorkflowRun.objects.filter(id=run_id, status="running").update(
+                changed_rows = WorkflowRun.objects.filter(id=run_id, status="running").update(
                     status=outcome, finished_at=Now(), updated_at=Now()
                 )
+                if changed_rows:
+                    integrations.enqueue([run_id], f"run.{outcome}")
                 result.finished.append((run_id, outcome))
     return result
 
@@ -449,7 +454,10 @@ def housekeeping(retention_days: int) -> dict[str, int]:
         ).delete()
         workers, _ = Worker.objects.filter(status="offline", last_heartbeat_at__lt=db_ago(7 * day)).delete()
         audit_rows, _ = AuditLog.objects.filter(created_at__lt=db_ago(180 * day)).delete()
-    return {"runs": runs, "tokens": tokens, "workers": workers, "audit": audit_rows}
+        deliveries, _ = IntegrationDelivery.objects.filter(
+            run__isnull=True, created_at__lt=db_ago(retention_days * day)
+        ).delete()
+    return {"runs": runs, "tokens": tokens, "workers": workers, "audit": audit_rows, "deliveries": deliveries}
 
 
 # ======================================================================= worker
@@ -649,6 +657,7 @@ def cancel_run(run_id: int, user_id: int | None = None) -> dict[str, Any]:
             cancel_requested=True, updated_at=Now()
         )
         WorkflowRun.objects.filter(id=run_id).update(status="cancelled", finished_at=Now(), updated_at=Now())
+        integrations.enqueue([run_id], "run.cancelled")
         audit(user_id, "run.cancel", f"run:{run_id}", {"running_tasks": running})
     return {"id": run_id, "status": "cancelled", "stopping_tasks": running}
 

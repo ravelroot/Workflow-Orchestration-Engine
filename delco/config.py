@@ -47,6 +47,9 @@ class Settings:
     session_hours: int
     login_max_failures: int
     login_lock_minutes: int
+    # Integrações
+    public_url: str
+    webhook_timeout: float
 
     @property
     def is_production(self) -> bool:
@@ -84,4 +87,6 @@ def get_settings() -> Settings:
         session_hours=int(_env("DELCO_SESSION_HOURS", "12")),
         login_max_failures=int(_env("DELCO_LOGIN_MAX_FAILURES", "5")),
         login_lock_minutes=int(_env("DELCO_LOGIN_LOCK_MINUTES", "5")),
+        public_url=_env("DELCO_PUBLIC_URL", "http://localhost:8080"),
+        webhook_timeout=float(_env("DELCO_WEBHOOK_TIMEOUT", "10")),
     )

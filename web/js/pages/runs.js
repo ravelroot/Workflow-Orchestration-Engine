@@ -1,9 +1,9 @@
 // Execuções: lista com filtros e página da execução com grafo ao vivo, linha do tempo e logs.
-import { can, get, live, post } from "../api.js";
+import { can, download, get, live, post } from "../api.js";
 import { navigate, triggerDialog } from "../app.js";
 import {
-  ATTEMPT, clear, confirmDialog, dateTime, debounce, drawer, duration, empty, h, icon, pill, progressBar, relative,
-  STATUS, time, toast, TRIGGER,
+  ATTEMPT, clear, confirmDialog, dateTime, debounce, downloadText, drawer, duration, empty, h, icon, pill,
+  progressBar, relative, STATUS, time, toast, TRIGGER,
 } from "../ui.js";
 import { dagView, gantt } from "../viz.js";
 import { runsTable } from "./overview.js";
@@ -13,16 +13,45 @@ const FILTERS = [["", "Todas"], ["running", "Rodando"], ["queued", "Na fila"], [
 export function runsPage(main, ctx) {
   let status = ctx.query.get("status") || "";
   let workflow = ctx.query.get("workflow") || "";
+  let trigger = ctx.query.get("trigger") || "";
+  let since = ctx.query.get("since") || "";
   let page = 1;
   const chips = h("div", { class: "chips" });
   const select = h("select", { class: "select auto", "aria-label": "Workflow" }, h("option", { value: "" }, "Todos os workflows"));
+  const origin = h("select", { class: "select auto", "aria-label": "Origem" }, h("option", { value: "" }, "Qualquer origem"),
+    Object.entries(TRIGGER).map(([v, l]) => h("option", { value: v, selected: v === trigger }, l)));
+  const period = h("select", { class: "select auto", "aria-label": "Período" },
+    [["", "Todo o histórico"], ["1", "Últimas 24 h"], ["7", "Últimos 7 dias"], ["30", "Últimos 30 dias"]].map(([v, l]) => h("option", { value: v, selected: v === since }, l)));
+  const search = h("input", { class: "input", type: "search", placeholder: "Número, workflow ou observação", style: { width: "290px" }, "aria-label": "Buscar execução" });
+  const exportBtn = h("button", { class: "btn ghost", onclick: async () => {
+    exportBtn.disabled = true;
+    try {
+      await download(`/runs/export?${filters()}`, `execucoes-delco-${new Date().toISOString().slice(0, 10)}.csv`);
+      toast("CSV exportado");
+    } catch (ex) {
+      toast(ex.message, "error");
+    } finally {
+      exportBtn.disabled = false;
+    }
+  } }, icon("download", 15), "Exportar CSV");
   const body = h("section", { class: "card" }, h("div", { class: "skeleton", style: { height: "360px" } }));
   const pager = h("div", { class: "row", style: { justifyContent: "space-between" } });
   main.append(h("div", { class: "page" },
-    h("div", { class: "page-head" }, h("div", { class: "stack" }, h("h1", {}, "Execuções"), h("p", { class: "muted" }, "Todas as execuções, da mais recente para a mais antiga.")),
-      can("operator") ? h("button", { class: "btn accent", onclick: () => triggerDialog() }, icon("play", 15), "Executar workflow") : null),
-    h("div", { class: "row wrap", style: { marginBottom: "14px" } }, chips, h("span", { class: "spacer" }), select),
+    h("div", { class: "page-head" }, h("div", { class: "stack" }, h("h1", {}, "Execuções"), h("p", { class: "muted" }, "Todas as execuções, da mais recente para a mais antiga. Filtre, busque pelo número e exporte o resultado.")),
+      h("div", { class: "row" }, exportBtn, can("operator") ? h("button", { class: "btn accent", onclick: () => triggerDialog() }, icon("play", 15), "Executar workflow") : null)),
+    h("div", { class: "toolbar" }, chips),
+    h("div", { class: "toolbar" }, h("div", { class: "search" }, icon("search", 15), search), select, origin, period),
     h("div", { class: "stack" }, body, pager)));
+
+  function filters() {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (workflow) q.set("workflow", workflow);
+    if (trigger) q.set("trigger", trigger);
+    if (since) q.set("since", since);
+    if (search.value.trim()) q.set("q", search.value.trim());
+    return q;
+  }
 
   function renderChips() {
     clear(chips, FILTERS.map(([value, label]) => h("button", {
@@ -32,12 +61,18 @@ export function runsPage(main, ctx) {
   }
 
   async function load() {
-    const q = new URLSearchParams({ page, size: 25 });
-    if (status) q.set("status", status);
-    if (workflow) q.set("workflow", workflow);
+    const q = filters();
+    q.set("page", page);
+    q.set("size", 25);
     try {
       const data = await get(`/runs?${q}`);
-      clear(body, h("div", { style: { paddingTop: "6px" } }, runsTable(data.items)));
+      const filtered = status || workflow || trigger || since || search.value.trim();
+      clear(body, data.items.length ? h("div", {}, runsTable(data.items)) : empty(
+        filtered ? "Nenhuma execução com esses filtros" : "Nenhuma execução ainda",
+        filtered ? "Tire algum filtro ou amplie o período." : "Dispare um workflow pelo botão Executar ou aguarde o próximo horário agendado.",
+        filtered ? h("button", { class: "btn ghost sm", onclick: () => {
+          status = workflow = trigger = since = ""; search.value = ""; select.value = origin.value = period.value = ""; page = 1; renderChips(); load();
+        } }, "Limpar filtros") : null));
       const pages = Math.max(1, Math.ceil(data.total / data.size));
       clear(pager,
         h("span", { class: "small muted" }, `${data.total} execuções · página ${data.page} de ${pages}`),
@@ -52,6 +87,9 @@ export function runsPage(main, ctx) {
     list.forEach((w) => select.append(h("option", { value: w.name, selected: w.name === workflow }, w.name)));
   });
   select.addEventListener("change", () => { workflow = select.value; page = 1; load(); });
+  origin.addEventListener("change", () => { trigger = origin.value; page = 1; load(); });
+  period.addEventListener("change", () => { since = period.value; page = 1; load(); });
+  search.addEventListener("input", debounce(() => { page = 1; load(); }, 300));
   renderChips();
   load();
   const refresh = debounce(() => page === 1 && load(), 1000);
@@ -206,6 +244,38 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
   const status = h("div");
   const body = h("div", { class: "stack lg" }, h("div", { class: "skeleton", style: { height: "200px" } }));
   const logBox = h("div", { class: "logbox", role: "log", "aria-live": "polite" });
+  const allLines = [];
+  const levels = new Set(["debug", "info", "warning", "error"]);
+  const logSearch = h("input", { class: "input", type: "search", placeholder: "Buscar no log", "aria-label": "Buscar no log" });
+  const lvToggle = h("div", { class: "lv-toggle", role: "group", "aria-label": "Níveis" }, ["debug", "info", "warning", "error"].map((lv) =>
+    h("button", { "aria-pressed": "true", onclick: (e) => {
+      levels.has(lv) ? levels.delete(lv) : levels.add(lv);
+      e.currentTarget.setAttribute("aria-pressed", String(levels.has(lv)));
+      repaintLogs();
+    } }, lv)));
+  const logText = () => allLines.map((l) => `${l.at} ${l.level.toUpperCase().padEnd(7)} ${l.message}`).join("\n");
+  const logTools = h("div", { class: "log-tools" },
+    h("div", { class: "search" }, icon("search", 14), logSearch), lvToggle,
+    h("button", { class: "icon-btn bordered", title: "Copiar log", "aria-label": "Copiar log", onclick: async () => {
+      try { await navigator.clipboard.writeText(logText()); toast("Log copiado"); } catch { toast("Não foi possível copiar", "error"); }
+    } }, icon("copy", 15)),
+    h("button", { class: "icon-btn bordered", title: "Baixar log (.txt)", "aria-label": "Baixar log", onclick: () =>
+      downloadText(`delco-run${runId}-${name}${attemptId ? `-tentativa${task?.attempts_list.find((a) => a.id === attemptId)?.number ?? ""}` : ""}.txt`, logText()) }, icon("download", 15)));
+  logSearch.addEventListener("input", debounce(repaintLogs, 150));
+  function lineEl(l) {
+    const q = logSearch.value.trim();
+    let msg = l.message;
+    if (q) {
+      const i = msg.toLowerCase().indexOf(q.toLowerCase());
+      if (i >= 0) msg = [msg.slice(0, i), h("mark", {}, msg.slice(i, i + q.length)), msg.slice(i + q.length)];
+    }
+    return h("div", { class: `logline ${l.level}` }, h("span", { class: "t" }, time(l.at)), h("span", { class: "lv" }, l.level), h("span", { class: "m" }, msg));
+  }
+  const visible = (l) => levels.has(l.level) && (!logSearch.value.trim() || l.message.toLowerCase().includes(logSearch.value.trim().toLowerCase()));
+  function repaintLogs() {
+    clear(logBox, allLines.filter(visible).map(lineEl));
+    if (allLines.length && !logBox.childElementCount) logBox.append(h("div", { class: "logline empty" }, h("span"), h("span"), h("span", { class: "m muted" }, "Nenhuma linha com esse filtro.")));
+  }
   let closeFn;
   const unsub = live.on((e) => {
     if (e.type === "log" && e.attempt_id === attemptId) appendLogs(e.lines);
@@ -224,13 +294,15 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
     for (const l of lines) {
       if (l.id <= lastLogId) continue;
       lastLogId = l.id;
-      logBox.append(h("div", { class: `logline ${l.level}` }, h("span", { class: "t" }, time(l.at)), h("span", { class: "lv" }, l.level), h("span", { class: "m" }, l.message)));
+      allLines.push(l);
+      if (visible(l)) logBox.append(lineEl(l));
     }
     if (atBottom) logBox.scrollTop = logBox.scrollHeight;
   }
 
   async function loadLogs() {
     clear(logBox);
+    allLines.length = 0;
     lastLogId = 0;
     if (!attemptId) {
       logBox.append(h("div", { class: "logline empty" }, h("span"), h("span"), h("span", { class: "m muted" }, "A tarefa ainda não rodou.")));
@@ -259,7 +331,7 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
     const tabsEl = h("div", { class: "tabs", role: "tablist", style: { marginBottom: "12px" } }, [["log", "Log"], ["output", "Resultado"], ["attempts", `Tentativas (${task.attempts_list.length})`]].map(([k, label]) =>
       h("button", { class: "tab", role: "tab", "aria-selected": String(tab === k), onclick: () => { tab = k; render(); } }, label)));
     let content;
-    if (tab === "log") content = h("div", { class: "stack sm" }, attemptSelect, logBox);
+    if (tab === "log") content = h("div", { class: "stack sm" }, h("div", { class: "row tight wrap" }, attemptSelect, h("div", { class: "grow" }, logTools)), logBox);
     else if (tab === "output") {
       content = task.status === "succeeded"
         ? h("pre", { class: "json" }, JSON.stringify(task.output, null, 2))

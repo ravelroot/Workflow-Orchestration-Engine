@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from ..models import RunStatus
+from ..models import RunStatus, Trigger
 
 
 class LoginSerializer(serializers.Serializer):
@@ -57,8 +57,34 @@ class PageSerializer(serializers.Serializer):
 class RunsQuerySerializer(serializers.Serializer):
     workflow = serializers.CharField(required=False)
     status = serializers.ChoiceField(choices=RunStatus.values, required=False)
+    trigger = serializers.ChoiceField(choices=Trigger.values, required=False)
+    since = serializers.IntegerField(min_value=1, max_value=366, required=False, help_text="dias")
+    q = serializers.CharField(required=False, allow_blank=True, max_length=100)
     page = serializers.IntegerField(min_value=1, default=1)
     size = serializers.IntegerField(min_value=1, max_value=100, default=25)
+
+
+class InsightsQuerySerializer(serializers.Serializer):
+    days = serializers.ChoiceField(choices=[7, 30], default=7)
+
+
+class UpcomingQuerySerializer(serializers.Serializer):
+    hours = serializers.IntegerField(min_value=1, max_value=168, default=24)
+
+
+class IntegrationSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=True, help_text="Alertas do time de dados")
+    kind = serializers.CharField(required=False, help_text="slack | discord | teams | google_chat | webhook | trigger")
+    url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    events = serializers.ListField(child=serializers.CharField(), required=False, help_text='["run.failed"]')
+    workflows = serializers.ListField(child=serializers.CharField(), required=False)
+    workflow = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    is_active = serializers.BooleanField(required=False, allow_null=True)
+
+
+class HookSerializer(serializers.Serializer):
+    params = serializers.DictField(required=False, default=dict)
+    note = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=500)
 
 
 class GridQuerySerializer(serializers.Serializer):

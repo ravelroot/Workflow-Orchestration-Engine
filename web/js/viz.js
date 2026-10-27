@@ -1,7 +1,7 @@
 // Visualizações: grafo de tarefas (DAG), gráfico de vazão, linha do tempo e grade.
 import { duration, h, icon, STATUS, tooltip, escapeHtml } from "./ui.js";
 
-const W = 176;
+const W = 184;
 const H = 48;
 const GX = 56;
 const GY = 14;
@@ -102,14 +102,14 @@ export function dagView(tasks, { onSelect, info } = {}) {
       edgesG.append(p);
       edgeEls.push({ from: u, el: p });
     }
-    const title = h("text", { class: "title", x: 14, y: 20 }, clip(t.name, 22));
-    const meta = h("text", { class: "meta", x: 14, y: 36 }, "");
-    const pbg = h("rect", { class: "pbar-bg", x: 14, y: H - 7, width: W - 26, height: 3, rx: 1.5, visibility: "hidden" });
-    const pbar = h("rect", { class: "pbar", x: 14, y: H - 7, width: 0, height: 3, rx: 1.5, visibility: "hidden" });
+    const title = h("text", { class: "title", x: 28, y: 21 }, clip(t.name, 19));
+    const meta = h("text", { class: "meta", x: 28, y: 36 }, "");
+    const pbg = h("rect", { class: "pbar-bg", x: 28, y: H - 7, width: W - 40, height: 3, rx: 1.5, visibility: "hidden" });
+    const pbar = h("rect", { class: "pbar", x: 28, y: H - 7, width: 0, height: 3, rx: 1.5, visibility: "hidden" });
     const g = h("g", { class: "dag-node", transform: `translate(${b.x},${b.y})`, tabindex: "0", role: "button", "aria-label": t.name },
       h("title", {}, t.name),
-      h("rect", { class: "box", width: W, height: H, rx: 6 }),
-      h("rect", { class: "accent-bar", x: 4, y: 6, width: 3, height: H - 12, rx: 1.5 }),
+      h("rect", { class: "box", width: W, height: H, rx: 8 }),
+      h("circle", { class: "lamp-dot", cx: 15, cy: 17, r: 4.5 }),
       title, meta, pbg, pbar);
     g.addEventListener("click", (e) => { e.stopPropagation(); onSelect?.(t.name); });
     g.addEventListener("keydown", (e) => (e.key === "Enter" || e.key === " ") && onSelect?.(t.name));
@@ -145,7 +145,7 @@ export function dagView(tasks, { onSelect, info } = {}) {
   }, { passive: false });
   let drag = null;
   wrap.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".dag-node, .dag-tools")) return;
+    if (e.target.closest(".dag-node, .dag-tools, .dag-legend")) return;
     drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
     wrap.classList.add("dragging");
     wrap.setPointerCapture(e.pointerId);
@@ -159,6 +159,8 @@ export function dagView(tasks, { onSelect, info } = {}) {
   const end = () => { drag = null; wrap.classList.remove("dragging"); };
   wrap.addEventListener("pointerup", end);
   wrap.addEventListener("pointercancel", end);
+  const lg = (cls, label) => h("span", {}, h("i", { style: { background: `var(--st-${cls})` } }), label);
+  const outer = h("div", {}, wrap, h("div", { class: "dag-legend", "aria-hidden": "true" }, lg("succeeded", "Sucesso"), lg("running", "Rodando"), lg("retry", "Nova tentativa"), lg("failed", "Falha"), lg("cancelled", "Cancelada"), lg("pending", "Pendente")));
   wrap.prepend(h("div", { class: "dag-tools" },
     h("button", { class: "icon-btn", title: "Aproximar", onclick: () => zoom(1.2) }, icon("plus", 15)),
     h("button", { class: "icon-btn", title: "Afastar", onclick: () => zoom(1 / 1.2) }, icon("minus", 15)),
@@ -178,14 +180,14 @@ export function dagView(tasks, { onSelect, info } = {}) {
       const running = s.status === "running" && s.progress !== null && s.progress !== undefined;
       e.pbg.setAttribute("visibility", running ? "visible" : "hidden");
       e.pbar.setAttribute("visibility", running ? "visible" : "hidden");
-      if (running) e.pbar.setAttribute("width", ((W - 26) * s.progress) / 100);
+      if (running) e.pbar.setAttribute("width", ((W - 40) * s.progress) / 100);
     }
     for (const edge of edgeEls) {
       edge.el.setAttribute("class", `dag-edge${states[edge.from]?.status === "succeeded" ? " done" : ""}`);
     }
   }
   update();
-  return { el: wrap, update, fit };
+  return { el: outer, update, fit };
 }
 
 // ------------------------------------------------------------- vazão (24 h)
@@ -205,8 +207,8 @@ export function throughputChart(rows) {
     svg.append(h("line", { class: "grid", x1: left, x2: w, y1: y(v), y2: y(v) }), h("text", { class: "axis", x: left - 8, y: y(v) + 4, "text-anchor": "end" }, v));
   }
   rows.forEach((r, i) => {
-    const x = left + i * bw + bw * 0.18;
-    const bwi = bw * 0.64;
+    const x = left + i * bw + bw * 0.22;
+    const bwi = bw * 0.56;
     const okH = y(0) - y(r.succeeded);
     const badH = y(0) - y(r.failed);
     if (r.succeeded) svg.append(h("rect", { class: "ok", x, y: y(r.succeeded), width: bwi, height: okH, rx: 2 }));
@@ -272,4 +274,31 @@ export function runGrid(data, workflow) {
   }
   void workflow;
   return g;
+}
+
+
+// --------------------------------------------- minigráfico diário (desempenho)
+export function dailySpark(days) {
+  const w = 140;
+  const hgt = 30;
+  const max = Math.max(1, ...days.map((d) => d.succeeded + d.failed));
+  const bw = w / days.length;
+  const svg = h("svg", { class: "spark", viewBox: `0 0 ${w} ${hgt}`, preserveAspectRatio: "none", role: "img", "aria-label": "Execuções por dia" });
+  days.forEach((d, i) => {
+    const x = i * bw + bw * 0.15;
+    const width = bw * 0.7;
+    const total = d.succeeded + d.failed;
+    if (!total) {
+      svg.append(h("rect", { class: "zero", x, y: hgt - 2, width, height: 2, rx: 1 }));
+      return;
+    }
+    const okH = ((hgt - 2) * d.succeeded) / max;
+    const badH = ((hgt - 2) * d.failed) / max;
+    if (d.succeeded) svg.append(h("rect", { class: "ok", x, y: hgt - okH, width, height: okH, rx: 1 }));
+    if (d.failed) svg.append(h("rect", { class: "bad", x, y: hgt - okH - badH - (d.succeeded ? 1 : 0), width, height: Math.max(2, badH), rx: 1 }));
+    const hit = h("rect", { x: i * bw, y: 0, width: bw, height: hgt, fill: "transparent" });
+    tooltip(hit, () => `${new Date(`${d.day}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}<br>${d.succeeded} com sucesso · ${d.failed} com falha`);
+    svg.append(hit);
+  });
+  return svg;
 }

@@ -267,7 +267,7 @@ def seed_history(*, now: datetime | None = None, seed: int = 2026) -> int:
                     pid=1,
                     queues=["default", "critical"],
                     concurrency=4,
-                    version="1.0.0",
+                    version="1.1.0",
                     status="offline",
                     started_at=now - timedelta(days=8),
                     last_heartbeat_at=now - timedelta(hours=26),
@@ -300,5 +300,71 @@ def seed_history(*, now: datetime | None = None, seed: int = 2026) -> int:
                         rng.choice(users) if users else None,
                     )
         batch.save()
+        seed_integrations(now, rng)
     log.info("Histórico de demonstração criado: %s execuções", len(batch))
     return len(batch)
+
+
+DEMO_INTEGRATIONS = [
+    # (nome, tipo, url, eventos, workflows)
+    ("Alertas do time de dados", "slack", "https://hooks.slack.com/services/T0DEMO000/B0DEMO000/exemplo",
+     ["run.failed", "run.cancelled"], []),
+    ("Canal #operacao no Discord", "discord", "https://discord.com/api/webhooks/000000000000/exemplo",
+     ["run.failed"], ["backup_noturno", "sincronizar_catalogo"]),
+    ("Relatório no Teams", "teams", "https://exemplo.webhook.office.com/webhookb2/exemplo",
+     ["run.succeeded", "run.failed"], ["relatorio_vendas_diario"]),
+    ("ERP interno", "webhook", "https://erp.exemplo.com.br/delco/eventos",
+     ["run.started", "run.succeeded", "run.failed", "run.cancelled"], ["sincronizar_catalogo"]),
+]
+
+
+def seed_integrations(now: datetime, rng: random.Random) -> int:
+    """Integrações de demonstração com um histórico de entregas fictício (os endereços não existem)."""
+    import secrets as _secrets
+
+    from . import integrations as integ_mod
+    from .models import Integration, IntegrationDelivery
+
+    if Integration.objects.exists():
+        return 0
+    admin = User.objects.filter(role="admin").order_by("id").values_list("id", flat=True).first()
+    created = []
+    for name, kind, url, events, wfs in DEMO_INTEGRATIONS:
+        created.append(Integration.objects.create(
+            name=name, kind=kind, url=url, events=events, workflows=wfs, created_by_id=admin,
+            secret=_secrets.token_hex(24) if kind == "webhook" else None,
+            created_at=now - timedelta(days=7, hours=2),
+        ))
+    target = Workflow.objects.filter(name="relatorio_vendas_diario").first()
+    if target:
+        token = integ_mod.TOKEN_PREFIX + _secrets.token_urlsafe(30)
+        Integration.objects.create(
+            name="GitHub Actions: publicar relatório", kind="trigger", workflow=target, created_by_id=admin,
+            token_hash=integ_mod.hash_token(token), token_prefix=token[:10], events=[],
+            created_at=now - timedelta(days=6), last_delivery_at=now - timedelta(hours=5), last_status="sent",
+        )
+    rows = []
+    runs = list(
+        WorkflowRun.objects.select_related("workflow", "triggered_by")
+        .filter(status__in=("succeeded", "failed", "cancelled"))
+        .order_by("-finished_at")[:400]
+    )
+    for integ in created:
+        picked = [
+            r for r in runs
+            if f"run.{r.status}" in integ.events and (not integ.workflows or r.workflow.name in integ.workflows)
+        ][:30]
+        for r in picked:
+            payload = integ_mod.run_payload(r, f"run.{r.status}")
+            ok = rng.random() > 0.06
+            rows.append(IntegrationDelivery(
+                integration=integ, run=r, event=f"run.{r.status}", payload=payload,
+                status="sent" if ok else "failed", attempts=1 if ok else integ_mod.MAX_ATTEMPTS,
+                response_code=200 if ok else 503, error=None if ok else "HTTP 503: Service Unavailable",
+                created_at=r.finished_at, next_attempt_at=r.finished_at,
+                sent_at=r.finished_at + timedelta(milliseconds=rng.randint(180, 900)) if ok else None,
+            ))
+        if picked:
+            Integration.objects.filter(id=integ.id).update(last_delivery_at=picked[0].finished_at, last_status="sent")
+    IntegrationDelivery.objects.bulk_create(rows)
+    return len(created)

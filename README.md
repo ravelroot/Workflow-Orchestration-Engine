@@ -5,7 +5,7 @@
 <h1 align="center">Delco<br><sub><sup><sup><sub>Copyright (©) 2026 Erik Pimenta</sub></sup></sup></sub></h1>
 
 <p align="center">
-  Motor de orquestração de workflows: você escreve o pipeline em Python, o Delco agenda, distribui as tarefas entre workers, repete o que falhar e, se um servidor cair no meio, continua exatamente de onde parou.<br>
+  Motor de orquestração de workflows: você escreve o pipeline em Python, o Delco agenda, distribui as tarefas entre workers, repete o que falhar, avisa o time no Slack, Discord, Teams ou Google Chat e, se um servidor cair no meio, continua exatamente de onde parou.<br>
   Pronto para usar, estudar ou adaptar.
 </p>
 
@@ -15,13 +15,25 @@
 
 ---
 
-> **Manual completo:** [`Manual-Delco.pdf`](Manual-Delco.pdf) explica a arquitetura, a instalação, como escrever workflows, cada tela do painel, a CLI, a API, a configuração, a operação em produção e a solução de problemas, passo a passo (cópia em [`docs/`](docs/Manual-Delco.pdf)).
+> **Manual completo:** [`Manual-Delco.pdf`](Manual-Delco.pdf) explica a arquitetura, a instalação, como escrever workflows, cada tela do painel, as integrações, a CLI, a API, a configuração, a operação em produção e a solução de problemas, passo a passo (cópia em [`docs/`](docs/Manual-Delco.pdf)).
 
-> **Banco de dados:** [`Banco-de-Dados-Delco.pdf`](Banco-de-Dados-Delco.pdf) traz o diagrama de relacionamentos, todas as tabelas com campos, tipos e chaves, a máquina de estados das execuções e tarefas e como preparar o MySQL.
+> **Banco de dados:** [`Banco-de-Dados-Delco.pdf`](Banco-de-Dados-Delco.pdf) traz o diagrama de relacionamentos, as 12 tabelas com campos, tipos e chaves, as máquinas de estado das execuções, tarefas e entregas de notificação e como preparar o MySQL.
 
 <p align="center">
-  <img src="docs/images/tela-painel.png" alt="Visão geral com execuções ativas, tarefas por hora, workers e execuções recentes">
+  <img src="docs/images/tela-painel.png" alt="Visão geral com o painel Agora (vagas dos workers acesas), indicadores de 24 h, tarefas por hora e próximas execuções">
 </p>
+
+## Novidades da versão 1.1.0
+
+- **Integrações:** notificações de execução para **Slack, Discord, Microsoft Teams, Google Chat** e **webhook genérico** (JSON assinado com HMAC-SHA256), com escolha de eventos e de workflows, histórico de entregas, novas tentativas automáticas e botão **Enviar teste**.
+- **Gatilho por URL:** uma URL secreta que dispara um workflow a partir do GitHub Actions, GitLab CI, n8n, Zapier ou qualquer sistema que faça um `POST`.
+- **Desempenho:** taxa de sucesso, duração p50 e p95 e execuções por dia de cada workflow, além das tarefas que mais falham e das mais lentas (7 ou 30 dias).
+- **Próximas execuções:** a visão geral mostra o que está agendado para as próximas 24 horas.
+- **Paleta de comandos e atalhos:** `Ctrl K` (ou `⌘K`) busca telas, workflows e execuções (`#118`); `g` + letra navega (`g e` abre Execuções) e `?` lista todos os atalhos.
+- **Execuções:** filtros por origem e período, busca por número ou observação e **Exportar CSV**.
+- **Logs da tarefa:** busca dentro do log, filtro por nível, copiar e baixar em `.txt`.
+- **Painel redesenhado:** mesma paleta e mesma logo preta e branca, com tipografia nova (Instrument Sans e JetBrains Mono), o painel **Agora** com as vagas dos workers acendendo em tempo real, estados como lâmpadas, grafo com legenda e telas mais claras.
+- **CLI:** `delco upcoming`, `delco integrations`, `delco export` e os filtros `--trigger` e `--since` em `delco runs`.
 
 ## O que o Delco faz
 
@@ -31,7 +43,8 @@
 - **Paralelismo:** tarefas sem dependência entre si rodam ao mesmo tempo, em quantos workers houver.
 - **Retentativas:** espera exponencial com variação aleatória, teto configurável e regras de disparo (`all_success`, `all_done`, `one_failed`).
 - **Retomada após queda:** o estado vive no MySQL. Worker que some perde a posse da tarefa quando o lease vence, e só o passo interrompido volta para a fila.
-- **Painel em tempo real:** grafo ao vivo, grade de execuções, linha do tempo, logs acompanhando a tarefa enquanto ela roda, quadro de vagas dos workers, tema claro e escuro.
+- **Painel em tempo real:** grafo ao vivo, grade de execuções, linha do tempo, logs acompanhando a tarefa enquanto ela roda, quadro de vagas dos workers, desempenho por workflow, paleta de comandos, tema claro e escuro.
+- **Integrações:** avisos no Slack, Discord, Teams e Google Chat, webhook assinado para outros sistemas e gatilho por URL para disparar workflows de fora.
 - **CLI e API:** tudo o que o painel faz também está na linha de comando (`delco trigger ... --wait`) e na API REST em Django REST Framework, documentada em Swagger.
 
 ## Arquitetura
@@ -50,12 +63,14 @@ flowchart LR
     API -- "WebSocket" --> UI["Navegador"]
     API --- PG
     CLI["CLI delco"] -->|HTTP| API
+    CI["GitHub Actions, CI,<br/>outros sistemas"] -- "POST /api/hooks/token" --> API
+    SCH -- "notificações<br/>com novas tentativas" --> NT["Slack · Discord · Teams<br/>Google Chat · webhook"]
 ```
 
 | Processo | Comando | Responsabilidade |
 |---|---|---|
 | API | `delco api` | Daphne (ASGI) com o Django: REST no DRF, WebSocket no Channels, painel pelo WhiteNoise, Swagger e migrações |
-| Agendador | `delco scheduler` (`manage.py scheduler`) | Lê a pasta de workflows, cria execuções agendadas, libera tarefas cujas dependências terminaram, recupera leases vencidos e republica mensagens perdidas |
+| Agendador | `delco scheduler` (`manage.py scheduler`) | Lê a pasta de workflows, cria execuções agendadas, libera tarefas cujas dependências terminaram, recupera leases vencidos, republica mensagens perdidas e envia as notificações das integrações |
 | Worker | `delco worker` (`manage.py worker`) | Consome as filas, assume cada tarefa no banco, roda a tentativa num processo filho com heartbeat, tempo limite e cancelamento |
 
 Pode haver vários agendadores e quantos workers quiser: as linhas são travadas com `select_for_update(skip_locked=True)` do ORM (`FOR UPDATE SKIP LOCKED` no MySQL 8) e as execuções agendadas têm chave única por horário, então nada roda em dobro.
@@ -73,8 +88,9 @@ Pode haver vários agendadores e quantos workers quiser: as linhas são travadas
 
 | Peça | Onde | O que faz |
 |---|---|---|
-| Modelos e migrações | `delco/models.py` · `delco/migrations/` | As 10 tabelas com CHECK, índices, chave única por horário (índice funcional) e `ON DELETE` no próprio banco (`DB_CASCADE` e `DB_SET_NULL` do Django 6.1) |
+| Modelos e migrações | `delco/models.py` · `delco/migrations/` | As 12 tabelas com CHECK, índices, chave única por horário (índice funcional) e `ON DELETE` no próprio banco (`DB_CASCADE` e `DB_SET_NULL` do Django 6.1) |
 | Transições de estado | `delco/store.py` | ORM com `transaction.atomic()`, `select_for_update(skip_locked=True)` e `UPDATE` condicional (compare-and-set) |
+| Integrações | `delco/integrations.py` | Entregas criadas na mesma transação que muda a execução, envio com `httpx` pelo agendador, assinatura HMAC e gatilho por URL |
 | API REST | `delco/api/views.py` · `serializers.py` · `auth.py` | Django REST Framework com autenticação por token, permissões por papel e erros num formato único |
 | Documentação | `/api/docs` | OpenAPI gerado pelo drf-spectacular, Swagger servido sem CDN |
 | Tempo real | `delco/api/consumers.py` · `events.py` | Django Channels: o evento chega do Redis e vai para os grupos `delco.eventos` e `delco.tentativa.<id>` |
@@ -173,8 +189,10 @@ Exemplos prontos na pasta [`workflows/`](workflows): `ola_delco` (mínimo), `rel
 | Tela | |
 |---|---|
 | <img src="docs/images/tela-workflows.png" alt="Lista de workflows com agenda e últimas execuções"> | <img src="docs/images/tela-grade.png" alt="Grade de execuções por tarefa"> |
-| <img src="docs/images/tela-tarefa.png" alt="Gaveta da tarefa com log, resultado e tentativas"> | <img src="docs/images/tela-falha.png" alt="Execução com falha e as quatro tentativas registradas"> |
-| <img src="docs/images/tela-workers.png" alt="Quadro de vagas dos workers e filas"> | <img src="docs/images/tela-escuro.png" alt="Painel no tema escuro"> |
+| <img src="docs/images/tela-tarefa.png" alt="Gaveta da tarefa com log ao vivo, busca, filtro por nível e download"> | <img src="docs/images/tela-falha.png" alt="Execução com falha e as tentativas registradas"> |
+| <img src="docs/images/tela-integracoes.png" alt="Integrações com Slack, Discord, Teams, webhook e gatilho por URL"> | <img src="docs/images/tela-desempenho.png" alt="Desempenho por workflow com p50, p95 e tarefas que mais falham"> |
+| <img src="docs/images/tela-comandos.png" alt="Paleta de comandos aberta com Ctrl K"> | <img src="docs/images/tela-execucoes.png" alt="Execuções com filtros por estado, origem e período e exportação em CSV"> |
+| <img src="docs/images/tela-workers.png" alt="Quadro de vagas dos workers e filas"> | <img src="docs/images/tela-escuro.png" alt="Execução de 50 passos no tema escuro"> |
 
 ## Linha de comando
 
@@ -182,12 +200,16 @@ Exemplos prontos na pasta [`workflows/`](workflows): `ola_delco` (mínimo), `rel
 delco login --url http://localhost:8080 --email operador@delco.dev   # salva um token pessoal
 delco workflows
 delco trigger relatorio_vendas_diario -p pasta_saida=/tmp/rel --wait  # código de saída 1 se falhar
-delco runs --status failed
+delco runs --status failed --since 7
+delco runs --trigger webhook           # só as disparadas pelo gatilho por URL
 delco logs 118 extrair_pedidos
 delco retry 118                       # refaz só o que falhou
 delco retry 118 --from consolidar     # refaz a partir de uma tarefa
 delco cancel 119
 delco pause sincronizar_catalogo
+delco upcoming --hours 24             # próximas execuções agendadas
+delco integrations                    # integrações e entregas
+delco export execucoes.csv --status failed --since 30
 ```
 
 Em servidores e CI, prefira `DELCO_URL` e `DELCO_TOKEN` (token pessoal criado em **Minha conta**).
@@ -211,8 +233,9 @@ Todas as rotas ficam em `/api`, respondem JSON e exigem `Authorization: Bearer <
 |---|---|
 | Acesso | `POST /auth/login` · `POST /auth/logout` · `GET /auth/me` · `PUT /auth/me/password` · `GET`, `POST` e `DELETE /tokens` |
 | Workflows | `GET /workflows` · `GET /workflows/{nome}` · `GET /workflows/{nome}/grid` · `POST /workflows/{nome}/runs` · `POST /workflows/{nome}/pause` e `/resume` |
-| Execuções | `GET /runs` · `GET /runs/{id}` · `POST /runs/{id}/cancel` · `POST /runs/{id}/retry` · `GET /runs/{id}/tasks/{tarefa}` · `GET /attempts/{id}/logs` |
-| Monitoramento | `GET /overview` · `GET /workers` · `GET /queues` · `GET /health` · `WS /ws` |
+| Execuções | `GET /runs` (filtros `status`, `workflow`, `trigger`, `since`, `q`) · `GET /runs/export` (CSV) · `GET /runs/{id}` · `POST /runs/{id}/cancel` · `POST /runs/{id}/retry` · `GET /runs/{id}/tasks/{tarefa}` · `GET /attempts/{id}/logs` |
+| Monitoramento | `GET /overview` · `GET /insights?days=7` · `GET /upcoming?hours=24` · `GET /workers` · `GET /queues` · `GET /health` · `WS /ws` |
+| Integrações | `GET` e `POST /integrations` · `GET`, `PATCH` e `DELETE /integrations/{id}` · `POST /integrations/{id}/test` · `GET /integrations/{id}/deliveries` · `POST /hooks/{token}` (sem cabeçalho de autorização) |
 | Administração | `GET`, `POST` e `PATCH /users` · `GET /audit` |
 
 ```bash
@@ -222,6 +245,38 @@ TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: applicat
 curl -s -X POST localhost:8080/api/workflows/ola_delco/runs -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"params": {"nome": "Delco"}}'
 ```
+
+## Integrações
+
+Em **Integrações** (menu lateral), um administrador conecta o Delco a outros serviços. Operadores veem as integrações e o histórico de entregas.
+
+| Tipo | Para que serve | O que configurar |
+|---|---|---|
+| Slack | Mensagem num canal | URL do webhook de entrada do canal |
+| Discord | Mensagem num canal | URL do webhook do canal |
+| Microsoft Teams | Mensagem num canal | URL do webhook de entrada ou de um fluxo do Workflows |
+| Google Chat | Mensagem num espaço | URL do webhook do espaço |
+| Webhook genérico | Avisar outro sistema | Qualquer URL `https://`; o corpo é JSON assinado |
+| Gatilho por URL | Disparar um workflow de fora | O workflow; o Delco gera a URL secreta |
+
+Cada notificação escolhe os eventos (**começou**, **concluída**, **falhou**, **cancelada**) e, se quiser, só alguns workflows. A entrega é criada na mesma transação que muda o estado da execução, então nada se perde se um processo cair; o agendador envia e, se o destino recusar, tenta de novo até 5 vezes (10 s, 20 s, 40 s e 80 s depois). **Enviar teste** confere a configuração na hora.
+
+O webhook genérico recebe um `POST` com os cabeçalhos `X-Delco-Event`, `X-Delco-Delivery` e `X-Delco-Signature: sha256=<hex>` (HMAC-SHA256 do corpo com o segredo da integração):
+
+```json
+{"event": "run.failed", "delivery_id": 42, "sent_at": "2026-10-27T13:00:05+00:00",
+ "run": {"id": 118, "workflow": "sincronizar_catalogo", "status": "failed", "trigger": "schedule",
+         "duration_ms": 15200, "tasks_total": 7, "tasks_failed": 1, "url": "http://localhost:8080/#/runs/118"}}
+```
+
+O gatilho por URL mostra o endereço uma única vez, logo depois de criado (só o SHA-256 do token fica no banco). Num GitHub Actions, por exemplo:
+
+```bash
+curl -X POST "$DELCO_HOOK_URL" -H 'Content-Type: application/json' \
+  -d '{"params": {"pasta_saida": "/tmp/rel"}, "note": "Build ${{ github.run_number }}"}'
+```
+
+As integrações de demonstração apontam para endereços fictícios: troque a URL por uma de verdade para receber as mensagens.
 
 ## Configuração
 
@@ -239,6 +294,8 @@ Todas as variáveis ficam no arquivo `.env` (modelo em [`.env.example`](.env.exa
 | `DELCO_LEASE_SECONDS` / `DELCO_HEARTBEAT_SECONDS` | `30` / `5` | Quanto tempo sem sinal até a tarefa ser considerada perdida |
 | `DELCO_ALLOWED_HOSTS` | `*` | `ALLOWED_HOSTS` do Django: o domínio do painel em produção |
 | `DELCO_SECRET_KEY` | sorteada | `SECRET_KEY` do Django (o Delco não assina cookies com ela) |
+| `DELCO_PUBLIC_URL` | `http://localhost:8080` | Endereço do painel usado nos links das notificações |
+| `DELCO_WEBHOOK_TIMEOUT` | `10` | Segundos de espera por resposta de Slack, Discord, Teams, Google Chat e webhooks |
 
 A lista completa, com os limites de log, resultado e sessão, está no manual.
 
@@ -248,9 +305,10 @@ A lista completa, com os limites de log, resultado e sessão, está no manual.
 |---|---|
 | Senhas | Hasher scrypt do Django, com sal. Mínimo de 8 caracteres com letras e números. Cinco erros seguidos bloqueiam a conta por 5 minutos |
 | Tokens | Opacos e aleatórios; só o SHA-256 fica no banco. Sessão do painel vale 12 horas; tokens pessoais têm validade escolhida e podem ser revogados |
+| Integrações | URLs de webhook aparecem mascaradas no painel e na API; o webhook genérico é assinado com HMAC-SHA256; o gatilho por URL guarda só o SHA-256 do token e pode ser desativado na hora |
 | Papéis | Leitura, Operador e Administrador, checados em cada rota pelas permissões do DRF |
 | Isolamento | Cada tentativa roda num processo filho; travar, estourar memória ou chamar `os._exit` derruba só a tarefa |
-| Auditoria | Logins, disparos, cancelamentos, retomadas, pausas, tokens e usuários ficam registrados |
+| Auditoria | Logins, disparos, cancelamentos, retomadas, pausas, tokens, usuários e integrações ficam registrados |
 | Cabeçalhos | `Content-Security-Policy` (CSP nativa do Django 6), `X-Frame-Options`, `nosniff` e `Cache-Control: no-store` na API |
 | Dados | Nenhum dado pessoal real no repositório. Segredos só no `.env`, que fica fora do Git |
 
@@ -262,10 +320,11 @@ Workflow-Orchestration-Engine/
 │   ├── sdk.py · context.py      definição de workflows e o objeto ctx
 │   ├── scheduler.py             agendador, despacho e recuperação
 │   ├── worker.py · runner.py    worker pool e processo filho de cada tentativa
-│   ├── models.py                modelos do Django (as 10 tabelas)
+│   ├── models.py                modelos do Django (as 12 tabelas)
 │   ├── migrations/              migrações do Django
 │   ├── store.py                 transições de estado com o ORM (compare-and-set)
 │   ├── bus.py                   Redis Streams, pub/sub e sinal de despertar
+│   ├── integrations.py          Slack, Discord, Teams, Google Chat, webhooks e gatilho por URL
 │   ├── api/                     DRF (views, serializers, permissões), Channels e consultas do painel
 │   ├── management/commands/     worker, scheduler, seed e createuser
 │   ├── settings.py · urls.py    configuração e rotas do Django
@@ -293,10 +352,10 @@ python manage.py makemigrations --check   # modelos e migrações em dia
 
 No Linux e no macOS, o `mysqlclient` precisa da biblioteca cliente do MySQL para instalar (no Ubuntu: `sudo apt install pkg-config libmysqlclient-dev`); no Windows o pip baixa o pacote pronto.
 
-São 77 testes com cobertura acima de 90% (mínimo exigido: 80%). Eles sobem workers e agendadores de verdade e cobrem: dependências e paralelismo, retentativas com espera, regras de disparo, tempo limite, processo que morre, cancelamento no meio da tarefa, **queda do worker no passo 23 de 50 com retomada só daquele passo**, mensagem repetida, mensagem perdida, Redis apagado, dois agendadores disputando o mesmo horário, desligamento gracioso, API, WebSocket, OpenAPI, papéis, tokens e CLI.
+São 83 testes com cobertura acima de 90% (mínimo exigido: 80%). Eles sobem workers e agendadores de verdade e cobrem: dependências e paralelismo, retentativas com espera, regras de disparo, tempo limite, processo que morre, cancelamento no meio da tarefa, **queda do worker no passo 23 de 50 com retomada só daquele passo**, mensagem repetida, mensagem perdida, Redis apagado, dois agendadores disputando o mesmo horário, desligamento gracioso, API, WebSocket, OpenAPI, papéis, tokens, CLI, **notificações assinadas entregues a um servidor HTTP de verdade**, novas tentativas quando o destino cai, gatilho por URL, desempenho, próximas execuções e exportação em CSV.
 
 O workflow [`ci.yml`](.github/workflows/ci.yml) roda a suíte com MySQL 8.4 e Redis e monta a imagem Docker a cada envio e uma vez por dia.
 
 ## Licença
 
-[MIT](LICENSE). Use, copie, altere e distribua à vontade. A fonte Public Sans é distribuída sob a [SIL Open Font License](web/fonts/OFL.txt).
+[MIT](LICENSE). Use, copie, altere e distribua à vontade. As fontes Instrument Sans e JetBrains Mono são distribuídas sob a [SIL Open Font License](web/fonts/OFL.txt).
