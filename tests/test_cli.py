@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 
@@ -55,6 +56,12 @@ def run_cli(capsys, *args: str) -> tuple[int, str]:
     return code, out.out + out.err
 
 
+def created_run(out: str) -> str:
+    match = re.search(r"Execução #(\d+) criada", out)
+    assert match, out
+    return match.group(1)
+
+
 def test_fluxo_completo_pela_cli(cli_env, workers, capsys, monkeypatch, tmp_path):
     with pytest.raises(SystemExit, match="Sem credenciais"):
         cli.main(["workflows"])
@@ -67,27 +74,30 @@ def test_fluxo_completo_pela_cli(cli_env, workers, capsys, monkeypatch, tmp_path
 
     workers()
     code, out = run_cli(capsys, "trigger", "linear", "-p", "base=5", "--note", "via cli", "--wait")
-    assert code == 0 and "Execução #1 criada" in out and "sucesso" in out
+    linear = created_run(out)
+    assert code == 0 and "sucesso" in out
 
     code, out = run_cli(capsys, "runs", "--workflow", "linear")
     assert "1 de 1 execuções" in out and "CLI" not in out.splitlines()[0]
-    code, out = run_cli(capsys, "run", "1")
+    code, out = run_cli(capsys, "run", linear)
     assert "carregar" in out and "1/3" in out
-    code, out = run_cli(capsys, "logs", "1", "extrair")
+    code, out = run_cli(capsys, "logs", linear, "extrair")
     assert "lendo dados" in out
     with pytest.raises(SystemExit, match="Tentativa 9"):
-        cli.main(["logs", "1", "extrair", "--attempt", "9"])
+        cli.main(["logs", linear, "extrair", "--attempt", "9"])
 
     code, out = run_cli(capsys, "trigger", "quebra", "--wait")
+    quebra = created_run(out)
     assert code == 1 and "falhou" in out
-    code, out = run_cli(capsys, "retry", "2", "--from", "processar")
+    code, out = run_cli(capsys, "retry", quebra, "--from", "processar")
     assert "processar" in out
     code, out = run_cli(capsys, "trigger", "longo")
+    longo = created_run(out)
     time.sleep(0.5)
-    code, out = run_cli(capsys, "cancel", "3")
+    code, out = run_cli(capsys, "cancel", longo)
     assert "cancelada" in out
     with pytest.raises(SystemExit, match="409"):
-        cli.main(["cancel", "3"])
+        cli.main(["cancel", longo])
 
     code, out = run_cli(capsys, "pause", "agendado")
     assert "pausado" in out
