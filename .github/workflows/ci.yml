@@ -43,7 +43,7 @@ jobs:
       DELCO_TEST_DATABASE_URL: mysql://delco:delco@127.0.0.1:3306/delco_test
       DELCO_TEST_REDIS_URL: redis://localhost:6379/15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: testes
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: cp .env.example .env
       - run: docker compose config -q
       - run: docker compose build
