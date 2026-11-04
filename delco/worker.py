@@ -1,5 +1,3 @@
-"""Pool de workers: consome as filas do Redis e executa cada tentativa num processo filho."""
-
 from __future__ import annotations
 
 import logging
@@ -37,7 +35,6 @@ def mp_context() -> mp.context.BaseContext:
 
 
 def default_worker_id() -> str:
-    """Nome estável entre reinícios do mesmo contêiner (host + pid), ou DELCO_WORKER_NAME."""
     if os.environ.get("DELCO_WORKER_NAME"):
         return os.environ["DELCO_WORKER_NAME"][:48]
     host = (socket.gethostname().split(".")[0] or "worker")[:32]
@@ -45,8 +42,6 @@ def default_worker_id() -> str:
 
 
 class _Execution:
-    """Acompanha uma tentativa: heartbeat, timeout, cancelamento e logs."""
-
     def __init__(self, worker: Worker, claim: store.Claim) -> None:
         self.worker = worker
         self.claim = claim
@@ -56,8 +51,8 @@ class _Execution:
         self.progress: int | None = None
         self.progress_sent: int | None = None
         self.proc: mp.process.BaseProcess | None = None
+        self.retry = True
 
-    # --------------------------------------------------------------- logs
     def add_log(self, level: str, message: str) -> None:
         limit = self.worker.settings.max_log_lines
         if self.lines >= limit:
@@ -76,7 +71,7 @@ class _Execution:
         lines, self.buffer = self.buffer, []
         try:
             rows = store.append_logs(self.claim.attempt_id, lines)
-        except Exception as exc:  # banco fora do ar: o log é perdido, a tarefa não
+        except Exception as exc:
             log.warning("Não foi possível gravar logs da tentativa %s: %s", self.claim.attempt_id, exc)
             return
         self.worker.bus.publish(
@@ -95,7 +90,6 @@ class _Execution:
             ],
         )
 
-    # ---------------------------------------------------------- execução
     def _kill(self) -> None:
         proc = self.proc
         if proc is None or not proc.is_alive():
@@ -103,7 +97,7 @@ class _Execution:
         try:
             if hasattr(os, "killpg") and proc.pid:
                 os.killpg(proc.pid, signal.SIGTERM)
-            else:  # pragma: no cover - Windows
+            else:
                 proc.terminate()
         except (ProcessLookupError, PermissionError, OSError):
             proc.terminate()
@@ -112,14 +106,13 @@ class _Execution:
             try:
                 if hasattr(os, "killpg") and proc.pid:
                     os.killpg(proc.pid, signal.SIGKILL)
-                else:  # pragma: no cover
+                else:
                     proc.kill()
             except (ProcessLookupError, PermissionError, OSError):
                 proc.kill()
             proc.join(3)
 
     def run(self) -> tuple[str, object, str | None, str | None]:
-        """Devolve (resultado, saída, erro, traceback). resultado: succeeded|failed|timed_out|cancelled|lost|interrupted."""
         w, c = self.worker, self.claim
         ctx = w.mp
         recv_end, send_end = ctx.Pipe(duplex=False)
@@ -155,14 +148,14 @@ class _Execution:
         while True:
             try:
                 if recv_end.poll(0.2):
-                    for _ in range(1000):  # esvazia o que chegou, sem deixar de checar heartbeat e prazo
+                    for _ in range(1000):
                         msg = recv_end.recv()
                         kind = msg[0]
                         if kind == "log":
                             self.add_log(msg[1], msg[2])
                         elif kind == "progress":
                             self.progress = int(msg[1])
-                        elif kind in ("result", "error"):
+                        elif kind in ("result", "error", "skip"):
                             final = msg
                         if not recv_end.poll(0):
                             break
@@ -218,7 +211,7 @@ class _Execution:
         self._kill()
         try:
             recv_end.close()
-        except OSError:  # pragma: no cover
+        except OSError:
             pass
         if outcome == "timed_out":
             return outcome, None, f"Tempo limite de {c.timeout:g} s atingido.", None
@@ -233,8 +226,14 @@ class _Execution:
             return "failed", None, f"O processo da tarefa terminou sem resultado (código {code}).", None
         if final[0] == "result":
             return "succeeded", final[1], None, None
-        _, exc_type, exc_msg, tb = final
+        if final[0] == "skip":
+            self.add_log("info", f"Tarefa pulada: {final[1]}")
+            return "skipped", None, final[1], None
+        exc_type, exc_msg, tb = final[1], final[2], final[3]
+        self.retry = bool(final[4]) if len(final) > 4 else True
         self.add_log("error", f"{exc_type}: {exc_msg}")
+        if not self.retry and c.attempt < c.max_attempts:
+            self.add_log("warning", "Erro marcado como definitivo: a tarefa não será repetida.")
         return "failed", None, f"{exc_type}: {exc_msg}", tb
 
 
@@ -264,8 +263,9 @@ class Worker:
         self._threads: list[threading.Thread] = []
         self.executed = 0
         self.crashed = False
+        self.paused = threading.Event()
+        self.health_file = Path(settings.health_dir) / "delco-worker.health"
 
-    # -------------------------------------------------------------- ciclo
     def start(self) -> None:
         store.register_worker(
             self.id, socket.gethostname(), os.getpid(), self.queues, self.concurrency, __version__
@@ -273,7 +273,8 @@ class Worker:
         release()
         for q in self.queues:
             self.bus.ensure_group(q, force=True)
-        self.bus.publish("worker", id=self.id, status="online")
+        self.check_pause()
+        self.bus.publish("worker", id=self.id, status="paused" if self.paused.is_set() else "online")
         for target, name in ((self._consume, "consumer"), (self._heartbeat, "heartbeat")):
             t = threading.Thread(target=target, name=f"delco-{name}", daemon=True)
             t.start()
@@ -288,7 +289,7 @@ class Worker:
         try:
             store.worker_heartbeat(self.id, "stopping")
             self.bus.publish("worker", id=self.id, status="stopping")
-        except Exception:  # pragma: no cover
+        except Exception:
             pass
         finally:
             release()
@@ -304,14 +305,13 @@ class Worker:
         try:
             store.worker_stopped(self.id)
             self.bus.publish("worker", id=self.id, status="offline")
-        except Exception:  # pragma: no cover
+        except Exception:
             pass
         finally:
             release()
         log.info("Worker %s parado (%s tentativas executadas)", self.id, self.executed)
 
     def kill(self) -> None:
-        """Simula uma queda: para tudo sem gravar mais nada no banco (usado nos testes)."""
         self.crashed = True
         self.stopping.set()
         self.force_stop.set()
@@ -319,7 +319,7 @@ class Worker:
         for t in self._threads:
             t.join(timeout=3)
 
-    def run_forever(self) -> None:  # pragma: no cover - laço do processo
+    def run_forever(self) -> None:
         done = threading.Event()
 
         def handle(signum, _frame):
@@ -333,19 +333,46 @@ class Worker:
             pass
         self.stop()
 
-    # ------------------------------------------------------------ threads
     def _heartbeat(self) -> None:
+        self.touch_health()
         while not self.stopping.wait(self.settings.heartbeat_seconds) and not self.crashed:
+            self.check_pause()
             try:
-                store.worker_heartbeat(self.id)
+                store.worker_heartbeat(self.id, "paused" if self.paused.is_set() else "online")
+                self.touch_health()
             except Exception as exc:
                 log.warning("Heartbeat do worker falhou: %s", exc)
             finally:
                 release()
 
+    def check_pause(self) -> bool:
+        try:
+            wanted = self.bus.is_worker_paused(self.id)
+        except Exception:
+            return self.paused.is_set()
+        if wanted and not self.paused.is_set():
+            self.paused.set()
+            log.info("Worker %s pausado: termina o que está rodando e não pega tarefas novas.", self.id)
+            self.bus.publish("worker", id=self.id, status="paused")
+        elif not wanted and self.paused.is_set():
+            self.paused.clear()
+            log.info("Worker %s retomado.", self.id)
+            self.bus.publish("worker", id=self.id, status="online")
+        return self.paused.is_set()
+
+    def touch_health(self) -> None:
+        try:
+            self.health_file.parent.mkdir(parents=True, exist_ok=True)
+            self.health_file.write_text(f"{self.id} {time.time():.0f}\n")
+        except OSError:
+            pass
+
     def _consume(self) -> None:
         last_autoclaim = 0.0
         while not self.stopping.is_set():
+            if self.paused.is_set():
+                self.stopping.wait(0.5)
+                continue
             with self.slots:
                 free = self.concurrency - self.active
                 if free <= 0:
@@ -362,12 +389,26 @@ class Worker:
                 log.warning("Falha ao ler a fila: %s", exc)
                 self.stopping.wait(2)
                 continue
+            if messages and self.paused.is_set():
+                self._give_back(messages)
+                continue
             for queue, message_id, task_id in messages:
                 if self.stopping.is_set():
-                    break  # sem ack: outro worker assume a mensagem
+                    break
                 with self.slots:
                     self.active += 1
                 self.pool.submit(self._slot, queue, message_id, task_id)
+
+    def _give_back(self, messages: list[tuple[str, str, int]]) -> None:
+        for queue, message_id, task_id in messages:
+            try:
+                new_id = self.bus.enqueue(queue, task_id)
+                store.touch_queued(task_id, new_id)
+                self.bus.ack(queue, message_id)
+            except Exception as exc:
+                log.warning("Não foi possível devolver a tarefa %s à fila: %s", task_id, exc)
+            finally:
+                release()
 
     def _slot(self, queue: str, message_id: str, task_id: int) -> None:
         try:
@@ -375,7 +416,7 @@ class Worker:
         except Exception:
             log.exception("Erro inesperado ao processar a tarefa %s", task_id)
         finally:
-            release()  # devolve a conexão deste thread ao pool
+            release()
             with self.slots:
                 self.active -= 1
                 self.slots.notify_all()
@@ -384,7 +425,7 @@ class Worker:
         claim = store.claim(task_id, self.id, self.settings.lease_seconds)
         self.bus.ack(queue, message_id)
         if claim is None:
-            return  # mensagem repetida ou tarefa cancelada: nada a fazer
+            return
         self.bus.publish(
             "task",
             id=claim.task_id,
@@ -404,10 +445,18 @@ class Worker:
         execution.flush_logs()
         self.executed += 1
         if outcome == "lost":
-            return  # outro processo já assumiu a tarefa; esta tentativa não grava nada
+            return
         if outcome == "interrupted":
             outcome = "lost"
-        status = store.finish(claim, outcome, output=output, error=error, traceback=tb, duration_ms=duration)
+        status = store.finish(
+            claim,
+            outcome,
+            output=output,
+            error=error,
+            traceback=tb,
+            duration_ms=duration,
+            retry=execution.retry,
+        )
         if status is not None:
             self.bus.publish(
                 "task",

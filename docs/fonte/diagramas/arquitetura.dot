@@ -1,0 +1,14 @@
+digraph arq {
+rankdir=LR;
+graph [fontname="Helvetica", bgcolor="transparent", pad="0.2", nodesep="0.35", ranksep="0.5"];
+node [fontname="Helvetica", fontsize=10, color="#d6cbc5", fontcolor="#1f292f"];
+edge [fontname="Helvetica", fontsize=8, color="#8a9eab", fontcolor="#65695b", arrowsize=0.7];
+node [shape=box, style="rounded,filled", fillcolor="#fdfbfa", penwidth=1.4];
+dev [label="Arquivos .py\nworkflows/"]; sch [label="Agendador\ndelco scheduler", color="#1f292f"]; db [label="MySQL\nfonte da verdade", shape=cylinder, color="#4c6170"];
+rs [label="Redis Streams\npub/sub e sinais", shape=cylinder, color="#4c6170"]; w1 [label="Worker\nN vagas", color="#1f292f"]; w2 [label="Worker\nN vagas", color="#1f292f"];
+api [label="API + painel\nDjango · DRF · Channels", color="#1f292f"]; ui [label="Navegador"]; cli [label="CLI delco"]; ci [label="CI e outros\nsistemas"];
+nt [label="Slack · Discord · Teams\nGoogle Chat · Telegram\ne-mail · webhook"]; pr [label="Prometheus"];
+dev -> sch [label="a cada 30 s"]; sch -> db [label="execuções e\ntarefas"]; sch -> rs [label="XADD e sinal"]; rs -> w1 [label="XREADGROUP"]; rs -> w2;
+w1 -> db [label="posse, heartbeat,\nresultado e logs"]; w2 -> db; w1 -> rs [label="eventos"]; rs -> api [label="pub/sub"]; api -> ui [label="WebSocket"]; api -> db;
+cli -> api [label="HTTP"]; ci -> api [label="POST /api/hooks"]; sch -> nt [label="avisos"]; pr -> api [label="/api/metrics"];
+}

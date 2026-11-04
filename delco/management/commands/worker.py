@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, queues=None, concurrency=None, name=None, **options):
         settings = get_settings()
-        migrate()  # com trava consultiva: seguro mesmo se API e agendador subirem juntos
+        migrate()
         Worker(
             Bus(settings.redis_url),
             settings,

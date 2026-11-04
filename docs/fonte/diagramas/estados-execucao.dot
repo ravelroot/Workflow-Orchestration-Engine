@@ -1,0 +1,19 @@
+digraph execucao {
+rankdir=LR;
+graph [fontname="Helvetica", bgcolor="transparent", pad="0.2", nodesep="0.35", ranksep="0.5"];
+node [fontname="Helvetica", fontsize=10, color="#d6cbc5", fontcolor="#1f292f"];
+edge [fontname="Helvetica", fontsize=8, color="#8a9eab", fontcolor="#65695b", arrowsize=0.7];
+queued [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#8a9eab", penwidth=2, label=<<font face="Courier" point-size="9">queued</font>>];
+running [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#4c6170", penwidth=2, label=<<font face="Courier" point-size="9">running</font>>];
+succeeded [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#9ca38e", penwidth=2, label=<<font face="Courier" point-size="9">succeeded</font>>];
+failed [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#a04e3c", penwidth=2, label=<<font face="Courier" point-size="9">failed</font>>];
+cancelled [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#65695b", penwidth=2, label=<<font face="Courier" point-size="9">cancelled</font>>];
+queued -> running [label="vaga livre"];
+running -> succeeded [label="todas ok"];
+running -> failed [label="alguma falhou ou\ntempo limite"];
+running -> cancelled [label="operador"];
+queued -> cancelled [label="operador"];
+failed -> queued [label="retomar ou\nmarcar tarefa"];
+cancelled -> queued [label="retomar"];
+succeeded -> queued [label="refazer a partir\nde uma tarefa"];
+}

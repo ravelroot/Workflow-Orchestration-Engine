@@ -1,5 +1,3 @@
-"""Utilitários prontos para usar dentro das tarefas."""
-
 from __future__ import annotations
 
 import shlex
@@ -26,7 +24,6 @@ def shell(
     env: dict[str, str] | None = None,
     check: bool = True,
 ) -> int:
-    """Roda um comando e envia cada linha da saída para o log da tarefa."""
     args = shlex.split(command) if isinstance(command, str) else list(command)
     shown = command if isinstance(command, str) else shlex.join(args)
     ctx.log(f"$ {shown}")
@@ -43,8 +40,6 @@ def shell(
 
 
 def http_json(ctx: TaskContext, method: str, url: str, *, timeout: float = 30, **kwargs: Any) -> Any:
-    """Faz uma chamada HTTP e devolve o JSON. Envia o ``ctx.idempotency_key`` no cabeçalho
-    ``Idempotency-Key`` para que o serviço chamado possa ignorar repetições."""
     headers = {"Idempotency-Key": ctx.idempotency_key, **kwargs.pop("headers", {})}
     ctx.log(f"{method.upper()} {url}")
     started = time.monotonic()

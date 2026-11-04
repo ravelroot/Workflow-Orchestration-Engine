@@ -1,9 +1,8 @@
-// Execuções: lista com filtros e página da execução com grafo ao vivo, linha do tempo e logs.
-import { can, download, get, live, post } from "../api.js";
+import { can, del, download, get, live, patch, post, prefs } from "../api.js";
 import { navigate, triggerDialog } from "../app.js";
 import {
-  ATTEMPT, clear, confirmDialog, dateTime, debounce, downloadText, drawer, duration, empty, h, icon, pill,
-  progressBar, relative, STATUS, time, toast, TRIGGER,
+  ATTEMPT, bulkBar, clear, confirmDialog, dateTime, debounce, downloadText, drawer, duration, empty, h, icon, modal, pill,
+  progressBar, relative, selection, STATUS, time, toast, TRIGGER,
 } from "../ui.js";
 import { dagView, gantt } from "../viz.js";
 import { runsTable } from "./overview.js";
@@ -36,12 +35,42 @@ export function runsPage(main, ctx) {
   } }, icon("download", 15), "Exportar CSV");
   const body = h("section", { class: "card" }, h("div", { class: "skeleton", style: { height: "360px" } }));
   const pager = h("div", { class: "row", style: { justifyContent: "space-between" } });
+  const bulk = h("div");
+  const size = prefs().page_size || 25;
+  const operator = can("operator");
+  let items = [];
+  const sel = operator ? selection(() => { paintBulk(); clear(body, h("div", {}, runsTable(items, { sel }))); }) : null;
+  function paintBulk() {
+    if (!sel) return;
+    const chosen = items.filter((r) => sel.has(r.id));
+    const activeN = chosen.filter((r) => ["queued", "running"].includes(r.status)).length;
+    const retryN = chosen.filter((r) => ["failed", "cancelled"].includes(r.status)).length;
+    clear(bulk, bulkBar(sel.ids.size, [
+      h("button", { class: "btn ghost sm", disabled: !activeN, onclick: () => bulkAction("cancel") }, icon("stop", 13), `Cancelar${activeN ? ` (${activeN})` : ""}`),
+      h("button", { class: "btn ghost sm", disabled: !retryN, onclick: () => bulkAction("retry") }, icon("retry", 13), `Retomar da falha${retryN ? ` (${retryN})` : ""}`),
+      can("admin") ? h("button", { class: "btn danger sm", onclick: () => bulkAction("delete") }, icon("trash", 13), "Excluir") : null,
+    ], () => sel.clear()));
+  }
+  async function bulkAction(action) {
+    const ids = [...sel.ids];
+    const words = { cancel: ["Cancelar execuções?", "As que estão na fila ou rodando recebem o pedido de parada.", "Cancelar"], retry: ["Retomar execuções?", "Cada uma refaz só o que falhou ou foi cancelado.", "Retomar"], delete: ["Excluir execuções?", "Tarefas, tentativas e logs somem de vez. Execuções em andamento não são excluídas.", "Excluir"] }[action];
+    if (!(await confirmDialog({ title: words[0], text: `${ids.length} selecionada(s). ${words[1]}`, confirm: words[2], danger: action !== "retry" }))) return;
+    try {
+      const r = await post("/runs/bulk", { action, ids });
+      const errs = Object.keys(r.errors).length;
+      toast(`${r.done.length} execução(ões) ${{ cancel: "cancelada(s)", retry: "retomada(s)", delete: "excluída(s)" }[action]}${errs ? ` · ${errs} ignorada(s)` : ""}`, errs && !r.done.length ? "error" : "ok");
+      sel.clear();
+      load();
+    } catch (ex) {
+      toast(ex.message, "error");
+    }
+  }
   main.append(h("div", { class: "page" },
     h("div", { class: "page-head" }, h("div", { class: "stack" }, h("h1", {}, "Execuções"), h("p", { class: "muted" }, "Todas as execuções, da mais recente para a mais antiga. Filtre, busque pelo número e exporte o resultado.")),
       h("div", { class: "row" }, exportBtn, can("operator") ? h("button", { class: "btn accent", onclick: () => triggerDialog() }, icon("play", 15), "Executar workflow") : null)),
     h("div", { class: "toolbar" }, chips),
     h("div", { class: "toolbar" }, h("div", { class: "search" }, icon("search", 15), search), select, origin, period),
-    h("div", { class: "stack" }, body, pager)));
+    h("div", { class: "stack" }, bulk, body, pager)));
 
   function filters() {
     const q = new URLSearchParams();
@@ -63,11 +92,14 @@ export function runsPage(main, ctx) {
   async function load() {
     const q = filters();
     q.set("page", page);
-    q.set("size", 25);
+    q.set("size", size);
     try {
       const data = await get(`/runs?${q}`);
+      items = data.items;
+      if (sel) [...sel.ids].filter((id) => !items.some((r) => r.id === id)).forEach((id) => sel.ids.delete(id));
+      paintBulk();
       const filtered = status || workflow || trigger || since || search.value.trim();
-      clear(body, data.items.length ? h("div", {}, runsTable(data.items)) : empty(
+      clear(body, data.items.length ? h("div", {}, runsTable(data.items, { sel })) : empty(
         filtered ? "Nenhuma execução com esses filtros" : "Nenhuma execução ainda",
         filtered ? "Tire algum filtro ou amplie o período." : "Dispare um workflow pelo botão Executar ou aguarde o próximo horário agendado.",
         filtered ? h("button", { class: "btn ghost sm", onclick: () => {
@@ -96,7 +128,6 @@ export function runsPage(main, ctx) {
   ctx.live((e) => (e.type === "run" || (e.type === "task" && e.status !== "running")) && refresh());
 }
 
-// -------------------------------------------------------------------- execução
 export function runPage(main, ctx) {
   const id = Number(ctx.params[0]);
   const head = h("div", { class: "skeleton", style: { height: "90px" } });
@@ -144,7 +175,8 @@ export function runPage(main, ctx) {
     clear(head, h("div", { class: "page-head", style: { marginBottom: 0 } },
       h("div", { class: "stack" },
         h("div", { class: "row tight" }, h("h1", {}, `Execução #${run.id}`), pill(run.status)),
-        h("p", { class: "muted" }, h("a", { href: `#/workflows/${run.workflow}`, class: "strong", style: { color: "var(--ink)" } }, run.workflow), ` · versão ${run.version}`, run.note ? ` · “${run.note}”` : "")),
+        h("p", { class: "muted row tight wrap" }, h("a", { href: `#/workflows/${run.workflow}`, class: "strong", style: { color: "var(--ink)" } }, run.workflow), ` · versão ${run.version}`, run.note ? h("span", {}, ` · “${run.note}”`) : "",
+          can("operator") ? h("button", { class: "icon-btn sm-icon", title: run.note ? "Editar observação" : "Adicionar observação", "aria-label": "Editar observação", onclick: editNote }, icon("edit", 14)) : null)),
       can("operator") ? h("div", { class: "row" },
         active ? h("button", { class: "btn danger", onclick: async () => {
           if (!(await confirmDialog({ title: "Cancelar execução?", text: "Tarefas na fila são canceladas e as que estão rodando recebem o pedido de parada no próximo heartbeat.", confirm: "Cancelar execução", danger: true }))) return;
@@ -153,18 +185,37 @@ export function runPage(main, ctx) {
         finished && run.tasks.some((t) => ["failed", "skipped", "cancelled"].includes(t.status)) ? h("button", { class: "btn", onclick: async () => {
           try { const r = await post(`/runs/${id}/retry`, {}); toast(`Retomando ${r.reset.length} tarefa(s)`); load(); } catch (ex) { toast(ex.message, "error"); }
         } }, icon("retry", 15), "Retomar da falha") : null,
-        finished ? h("button", { class: "btn ghost", onclick: () => triggerDialog(run.workflow, run.params, { onDone: (r) => navigate(`/runs/${r.id}`) }) }, icon("play", 14), "Executar de novo") : null) : null));
+        finished ? h("button", { class: "btn ghost", onclick: () => triggerDialog(run.workflow, run.params, { onDone: (r) => navigate(`/runs/${r.id}`) }) }, icon("play", 14), "Executar de novo") : null,
+        finished && can("admin") ? h("button", { class: "icon-btn bordered", title: "Excluir execução", "aria-label": "Excluir execução", onclick: async () => {
+          if (!(await confirmDialog({ title: `Excluir a execução #${run.id}?`, text: "Tarefas, tentativas e logs desta execução somem de vez. A auditoria registra quem excluiu.", confirm: "Excluir", danger: true }))) return;
+          try { await del(`/runs/${id}`); toast(`Execução #${id} excluída`); navigate("/runs"); } catch (ex) { toast(ex.message, "error"); }
+        } }, icon("trash", 16)) : null) : null,
+      run.error ? h("div", { class: "notice error", style: { flexBasis: "100%" } }, icon("alert", 16), h("div", { class: "small" }, h("strong", {}, "Motivo: "), run.error)) : null));
     const fact = (label, value, title) => h("div", { class: "fact" }, h("span", { class: "label" }, label), h("span", { class: "value", title: title || "" }, value));
     clear(facts, h("div", { class: "facts" },
       fact("Origem", `${TRIGGER[run.trigger] || run.trigger}${run.triggered_by ? ` · ${run.triggered_by}` : ""}`),
       fact(run.logical_date ? "Data lógica" : "Criada", dateTime(run.logical_date || run.created_at, true)),
       fact("Início", run.started_at ? dateTime(run.started_at, true) : "aguardando vaga"),
       fact("Fim", run.finished_at ? dateTime(run.finished_at, true) : "—"),
-      fact("Duração", duration(run.duration_ms)),
+      fact("Duração", h("span", {}, duration(run.duration_ms), compare(run)), run.baseline_ms ? `Mediana das últimas execuções com sucesso: ${duration(run.baseline_ms)}` : ""),
       fact("Tarefas", `${run.tasks_succeeded} de ${run.tasks_total} concluídas`)));
     const counts = {};
     run.tasks.forEach((t) => (counts[t.status] = (counts[t.status] || 0) + 1));
     clear(summary, Object.entries(counts).map(([s, n]) => `${n} ${STATUS[s].toLowerCase()}`).join(" · "));
+  }
+
+  function editNote() {
+    modal((box, close) => {
+      const input = h("input", { class: "input", id: "run-note", maxlength: "500", value: run.note || "", placeholder: "Ex.: reprocessado por causa do fornecedor" });
+      box.append(h("form", { onsubmit: async (e) => {
+        e.preventDefault();
+        try { await patch(`/runs/${id}`, { note: input.value }); toast("Observação salva"); close(); load(); } catch (ex) { toast(ex.message, "error"); }
+      } },
+      h("h2", {}, "Observação"),
+      h("p", { class: "muted small" }, "Aparece na lista de execuções, nas notificações e na exportação em CSV."),
+      h("div", { class: "field", style: { marginTop: "16px" } }, input),
+      h("div", { class: "actions" }, h("button", { class: "btn ghost", type: "button", onclick: close }, "Cancelar"), h("button", { class: "btn", type: "submit" }, "Salvar"))));
+    });
   }
 
   function renderTasks() {
@@ -207,7 +258,7 @@ export function runPage(main, ctx) {
     view?.update(stateMap());
     history.replaceState(null, "", `#/runs/${id}?task=${encodeURIComponent(name)}`);
     openTask?.close();
-    openTask = taskDrawer(id, name, () => {
+    openTask = taskDrawer(id, name, () => run, () => {
       selected = null;
       openTask = null;
       if (leaving) return;
@@ -216,13 +267,13 @@ export function runPage(main, ctx) {
     }, load);
   }
 
-  load().then(() => selected && run?.tasks.some((t) => t.name === selected) && openDrawer(selected));
+  load().then(() => !leaving && selected && run?.tasks.some((t) => t.name === selected) && openDrawer(selected));
   const refresh = debounce(load, 350);
   ctx.live((e) => {
     if (e.type === "task" && e.run_id === id) {
       const t = run?.tasks.find((x) => x.id === e.id);
       if (t && e.status === "running" && t.status === "running" && e.progress !== undefined) {
-        t.progress = e.progress; // só progresso: atualiza sem ir ao servidor
+        t.progress = e.progress;
         view?.update(stateMap());
         return;
       }
@@ -233,8 +284,14 @@ export function runPage(main, ctx) {
   ctx.onCleanup(() => { leaving = true; clearInterval(ticker); openTask?.close(); });
 }
 
-// ---------------------------------------------------------------- gaveta da tarefa
-function taskDrawer(runId, name, onClosed, reloadRun) {
+function compare(run) {
+  if (!run.baseline_ms || !run.duration_ms || run.status !== "succeeded" || run.tasks_succeeded !== run.tasks_total) return null;
+  const diff = Math.round((100 * (run.duration_ms - run.baseline_ms)) / run.baseline_ms);
+  if (Math.abs(diff) < 10) return h("small", { class: "cmp" }, " · no normal");
+  return h("small", { class: `cmp ${diff > 0 ? "slow" : "fast"}` }, ` · ${Math.abs(diff)}% ${diff > 0 ? "mais lenta" : "mais rápida"}`);
+}
+
+function taskDrawer(runId, name, getRun, onClosed, reloadRun) {
   let task;
   let attemptId = null;
   let followLatest = true;
@@ -243,7 +300,13 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
   const title = h("div", { class: "stack sm grow" }, h("span", { class: "tiny muted" }, `Execução #${runId}`), h("h2", { class: "mono", style: { fontSize: "16px" } }, name));
   const status = h("div");
   const body = h("div", { class: "stack lg" }, h("div", { class: "skeleton", style: { height: "200px" } }));
-  const logBox = h("div", { class: "logbox", role: "log", "aria-live": "polite" });
+  let wrapLines = prefs().log_wrap !== false;
+  let follow = true;
+  const logBox = h("div", { class: `logbox${wrapLines ? "" : " nowrap"}`, role: "log", "aria-live": "polite" });
+  logBox.addEventListener("scroll", () => {
+    const atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 20;
+    if (atBottom !== follow) { follow = atBottom; followBtn.setAttribute("aria-pressed", String(follow)); }
+  });
   const allLines = [];
   const levels = new Set(["debug", "info", "warning", "error"]);
   const logSearch = h("input", { class: "input", type: "search", placeholder: "Buscar no log", "aria-label": "Buscar no log" });
@@ -254,8 +317,27 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
       repaintLogs();
     } }, lv)));
   const logText = () => allLines.map((l) => `${l.at} ${l.level.toUpperCase().padEnd(7)} ${l.message}`).join("\n");
+  const followBtn = h("button", { class: "icon-btn bordered toggle", title: "Acompanhar o fim do log", "aria-label": "Acompanhar o fim do log", "aria-pressed": "true", onclick: () => {
+    follow = !follow;
+    followBtn.setAttribute("aria-pressed", String(follow));
+    if (follow) logBox.scrollTop = logBox.scrollHeight;
+  } }, icon("pin", 15));
+  const wrapBtn = h("button", { class: "icon-btn bordered toggle", title: "Quebrar linhas longas", "aria-label": "Quebrar linhas longas", "aria-pressed": String(wrapLines), onclick: () => {
+    wrapLines = !wrapLines;
+    wrapBtn.setAttribute("aria-pressed", String(wrapLines));
+    logBox.classList.toggle("nowrap", !wrapLines);
+  } }, icon("wrap", 15));
+  const errBtn = h("button", { class: "icon-btn bordered", title: "Ir para o primeiro erro", "aria-label": "Ir para o primeiro erro", onclick: () => {
+    const el = logBox.querySelector(".logline.error, .logline.warning");
+    if (!el) { toast("Nenhum erro ou aviso neste log"); return; }
+    follow = false;
+    followBtn.setAttribute("aria-pressed", "false");
+    logBox.querySelectorAll(".logline.flash").forEach((x) => x.classList.remove("flash"));
+    el.classList.add("flash");
+    el.scrollIntoView({ block: "center" });
+  } }, icon("flag", 15));
   const logTools = h("div", { class: "log-tools" },
-    h("div", { class: "search" }, icon("search", 14), logSearch), lvToggle,
+    h("div", { class: "search" }, icon("search", 14), logSearch), lvToggle, followBtn, wrapBtn, errBtn,
     h("button", { class: "icon-btn bordered", title: "Copiar log", "aria-label": "Copiar log", onclick: async () => {
       try { await navigator.clipboard.writeText(logText()); toast("Log copiado"); } catch { toast("Não foi possível copiar", "error"); }
     } }, icon("copy", 15)),
@@ -289,7 +371,7 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
   });
 
   function appendLogs(lines) {
-    const atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 20;
+    const atBottom = follow;
     if (lines.length) logBox.querySelectorAll(".logline.empty").forEach((el) => el.remove());
     for (const l of lines) {
       if (l.id <= lastLogId) continue;
@@ -355,17 +437,48 @@ function taskDrawer(runId, name, onClosed, reloadRun) {
         kv("Tempo limite", task.timeout_seconds ? duration(task.timeout_seconds * 1000) : "sem limite"),
         kv("Depende de", task.upstream.length ? task.upstream.join(", ") : "—"),
         kv("Regra", task.trigger_rule),
+        task.retry_on ? kv("Repete só", task.retry_on.join(", ")) : null,
         kv(task.status === "retry_wait" ? "Nova tentativa" : "Retentativas", task.status === "retry_wait" && task.ready_at ? relative(task.ready_at) : `${task.retries} · espera ${task.retry_delay}s × ${task.retry_backoff}`)),
       task.status === "running" && task.progress !== null ? h("div", { class: "progress-line" }, progressBar([{ cls: "run", value: task.progress }, { cls: "", value: 100 - task.progress }]), h("span", { class: "small num" }, `${task.progress}%`)) : null,
+      task.description ? h("p", { class: "small muted" }, task.description) : null,
       task.error && task.status !== "succeeded" ? h("div", { class: `notice ${task.status === "skipped" ? "" : "error"}` }, icon("alert", 16), h("div", { class: "small" }, task.error)) : null,
-      can("operator") && finished ? h("div", { class: "row" }, h("button", { class: "btn ghost sm", onclick: async () => {
+      can("operator") && finished ? h("div", { class: "row tight wrap" }, h("button", { class: "btn ghost sm", onclick: async () => {
         try {
           const r = await post(`/runs/${runId}/retry`, { from_task: name });
           toast(`Reexecutando ${r.reset.length} tarefa(s) a partir de ${name}`);
           reloadRun();
         } catch (ex) { toast(ex.message, "error"); }
-      } }, icon("retry", 14), "Reexecutar a partir desta tarefa")) : null,
+      } }, icon("retry", 14), "Reexecutar a partir desta tarefa"),
+      runFinished() ? markMenu() : null) : null,
       h("div", {}, tabsEl, content));
+  }
+
+  function runFinished() {
+    const r = getRun();
+    return r && !["queued", "running"].includes(r.status);
+  }
+
+  function markMenu() {
+    const options = [["succeeded", "Marcar como sucesso", "check"], ["skipped", "Marcar como pulada", "skip"], ["failed", "Marcar como falha", "alert"]].filter(([st]) => st !== task.status);
+    return h("button", { class: "btn ghost sm", "aria-haspopup": "menu", onclick: (e) => {
+      document.querySelector(".menu")?.remove();
+      const r = e.currentTarget.getBoundingClientRect();
+      const menu = h("div", { class: "menu", role: "menu", style: { left: `${Math.min(r.left, innerWidth - 270)}px`, top: `${r.bottom + 6}px`, width: "260px" } },
+        options.map(([st, label, ic]) => h("button", { role: "menuitem", onclick: async () => {
+          menu.remove();
+          const text = st === "failed" ? "A execução passa a contar como falha." : "As tarefas seguintes que foram puladas por causa desta voltam para a fila e a execução continua.";
+          if (!(await confirmDialog({ title: `${label}?`, text: `${text} A ação fica registrada na auditoria.`, confirm: label }))) return;
+          try {
+            const res = await post(`/runs/${runId}/tasks/${encodeURIComponent(name)}/mark`, { status: st });
+            toast(res.reset.length ? `Seguindo com ${res.reset.length} tarefa(s)` : `Execução agora: ${STATUS[res.run_status]}`);
+            reloadRun();
+            refresh();
+          } catch (ex) { toast(ex.message, "error"); }
+        } }, icon(ic, 16), label)));
+      document.body.append(menu);
+      const close = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener("mousedown", close); } };
+      setTimeout(() => document.addEventListener("mousedown", close));
+    } }, icon("more", 14), "Marcar como…");
   }
 
   async function refresh() {

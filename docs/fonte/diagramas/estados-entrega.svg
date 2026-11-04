@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="207pt" height="138pt"
+ viewBox="0.00 0.00 206.80 137.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 123.4)">
+<title>entrega</title>
+<g id="node1" class="node">
+<title>pending</title>
+<path fill="#fdfbfa" stroke="#d9c3b6" stroke-width="2" d="M42,-66C42,-66 12,-66 12,-66 6,-66 0,-60 0,-54 0,-54 0,-42 0,-42 0,-36 6,-30 12,-30 12,-30 42,-30 42,-30 48,-30 54,-36 54,-42 54,-42 54,-54 54,-54 54,-60 48,-66 42,-66"/>
+<text text-anchor="start" x="8.5" y="-45.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">pending</text>
+</g>
+<g id="edge2" class="edge">
+<title>pending&#45;&gt;pending</title>
+<path fill="none" stroke="#8a9eab" d="M16.51,-66.12C13.33,-78.65 16.83,-91 27,-91 35.26,-91 39.12,-82.85 38.57,-73.07"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="40.99,-72.65 37.49,-66.12 36.15,-73.41 40.99,-72.65"/>
+<text text-anchor="middle" x="27" y="-102.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">erro: 10, 20,</text>
+<text text-anchor="middle" x="27" y="-93.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">40 e 80 s</text>
+</g>
+<g id="node2" class="node">
+<title>sent</title>
+<path fill="#fdfbfa" stroke="#9ca38e" stroke-width="2" d="M166,-105C166,-105 136,-105 136,-105 130,-105 124,-99 124,-93 124,-93 124,-81 124,-81 124,-75 130,-69 136,-69 136,-69 166,-69 166,-69 172,-69 178,-75 178,-81 178,-81 178,-93 178,-93 178,-99 172,-105 166,-105"/>
+<text text-anchor="start" x="140" y="-84.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">sent</text>
+</g>
+<g id="edge1" class="edge">
+<title>pending&#45;&gt;sent</title>
+<path fill="none" stroke="#8a9eab" d="M54.17,-56.37C72.59,-62.25 97.37,-70.17 117.11,-76.49"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="116.46,-78.85 123.87,-78.65 117.95,-74.18 116.46,-78.85"/>
+<text text-anchor="middle" x="89" y="-74.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">2xx</text>
+</g>
+<g id="node3" class="node">
+<title>failed</title>
+<path fill="#fdfbfa" stroke="#a04e3c" stroke-width="2" d="M166,-36C166,-36 136,-36 136,-36 130,-36 124,-30 124,-24 124,-24 124,-12 124,-12 124,-6 130,0 136,0 136,0 166,0 166,0 172,0 178,-6 178,-12 178,-12 178,-24 178,-24 178,-30 172,-36 166,-36"/>
+<text text-anchor="start" x="135" y="-15.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">failed</text>
+</g>
+<g id="edge3" class="edge">
+<title>pending&#45;&gt;failed</title>
+<path fill="none" stroke="#8a9eab" d="M54.17,-41.56C72.51,-37.06 97.15,-31 116.86,-26.15"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="117.66,-28.48 123.87,-24.43 116.49,-23.72 117.66,-28.48"/>
+<text text-anchor="middle" x="89" y="-38.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">5ª falha</text>
+</g>
+<g id="edge4" class="edge">
+<title>failed&#45;&gt;pending</title>
+<path fill="none" stroke="#8a9eab" d="M123.68,-11.85C108.23,-9.41 88.55,-8.35 72,-14 64.87,-16.43 58.01,-20.54 51.9,-25.07"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="50.02,-23.43 46.07,-29.7 53.07,-27.27 50.02,-23.43"/>
+<text text-anchor="middle" x="89" y="-16.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">reenviar</text>
+</g>
+</g>
+</svg>

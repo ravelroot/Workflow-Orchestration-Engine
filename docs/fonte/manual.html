@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Delco — Manual técnico do projeto</title>
+<meta name="author" content="Erik Pimenta">
+<meta name="description" content="Motor de orquestração de workflows com Python, Django, MySQL, Redis e WebSockets">
+<meta name="generator" content="Delco">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="marca"><svg viewBox="0 0 64 64"><g fill="#000"><rect x="2" y="2" width="16" height="16" rx="4"/><rect x="24" y="2" width="16" height="16" rx="4"/><rect x="46" y="2" width="16" height="16" rx="4"/><rect x="2" y="24" width="16" height="16" rx="4"/><rect x="24" y="24" width="16" height="16" rx="4"/><rect x="2" y="46" width="16" height="16" rx="4"/></g><g fill="none" stroke="#000" stroke-width="3.5"><rect x="47.75" y="25.75" width="12.5" height="12.5" rx="3"/><rect x="25.75" y="47.75" width="12.5" height="12.5" rx="3"/><rect x="47.75" y="47.75" width="12.5" height="12.5" rx="3"/></g></svg>Delco</div>
+<span class="doc-title">Manual técnico do projeto</span>
+
+<section class="capa">
+  <svg class="logo" viewBox="0 0 64 64"><g fill="#fff"><rect x="2" y="2" width="16" height="16" rx="4"/><rect x="24" y="2" width="16" height="16" rx="4"/><rect x="46" y="2" width="16" height="16" rx="4"/><rect x="2" y="24" width="16" height="16" rx="4"/><rect x="24" y="24" width="16" height="16" rx="4"/><rect x="2" y="46" width="16" height="16" rx="4"/></g><g fill="none" stroke="#fff" stroke-width="3.5"><rect x="47.75" y="25.75" width="12.5" height="12.5" rx="3"/><rect x="25.75" y="47.75" width="12.5" height="12.5" rx="3"/><rect x="47.75" y="47.75" width="12.5" height="12.5" rx="3"/></g></svg>
+  <div class="bloco">
+    <div class="linha"></div>
+    <h1>Delco</h1>
+    <p class="sub">Manual técnico do projeto</p>
+    <p class="desc">Motor de orquestração de workflows com Python, Django, MySQL, Redis e WebSockets</p>
+    <div class="quadros"><span></span><span class="on"></span><span class="on"></span><span></span><span></span><span class="on"></span><span></span><span></span><span></span><span class="on"></span><span></span><span></span></div>
+    <p class="copy">Copyright (©) 2026 Erik Pimenta</p>
+  </div>
+  <div class="rodape">Versão 1.2.0 · Novembro de 2026 · Licença MIT</div>
+</section>
+
+<section class="sumario">
+  <h1>Sumário</h1>
+  <ol>
+    <li class="cap"><a href="#c1">1. Visão geral</a></li>
+    <li class="sec"><a href="#c1-novidades">Novidades da versão 1.2.0</a></li>
+    <li class="sec"><a href="#c1-tec">Tecnologias</a></li>
+    <li class="cap"><a href="#c2">2. Como rodar</a></li>
+    <li class="sec"><a href="#c2-contas">Contas de demonstração</a></li>
+    <li class="cap"><a href="#c3">3. Escrevendo workflows</a></li>
+    <li class="sec"><a href="#c3-params">Parâmetros tipados</a></li>
+    <li class="sec"><a href="#c3-ctx">O objeto ctx, skip, fail e retry_on</a></li>
+    <li class="sec"><a href="#c3-local">Testar sem servidor</a></li>
+    <li class="cap"><a href="#c4">4. Guia das telas</a></li>
+    <li class="sec"><a href="#c4-workflows">Workflows, versões e código</a></li>
+    <li class="sec"><a href="#c4-exec">Execuções e tarefas</a></li>
+    <li class="sec"><a href="#c4-sistema">Sistema</a></li>
+    <li class="sec"><a href="#c4-conta">Minha conta, preferências e paletas</a></li>
+    <li class="cap"><a href="#c5">5. Arquitetura</a></li>
+    <li class="cap"><a href="#c6">6. Integrações</a></li>
+    <li class="cap"><a href="#c7">7. Linha de comando</a></li>
+    <li class="cap"><a href="#c8">8. API</a></li>
+    <li class="cap"><a href="#c9">9. Configuração</a></li>
+    <li class="cap"><a href="#c10">10. Operação em produção</a></li>
+    <li class="cap"><a href="#c11">11. Segurança</a></li>
+    <li class="cap"><a href="#c12">12. Testes e qualidade</a></li>
+    <li class="cap"><a href="#c13">13. Solução de problemas</a></li>
+  </ol>
+</section>
+
+<section class="capitulo" id="c1">
+  <p class="num">Capítulo 1</p>
+  <h1>Visão geral</h1>
+  <p>O Delco é um motor de orquestração de workflows de código aberto, no estilo do Apache Airflow e do Temporal. Você descreve um pipeline em Python como um grafo de tarefas com dependências; o Delco agenda as execuções, distribui as tarefas entre workers, repete o que falhar com espera exponencial e mostra tudo em tempo real num painel web.</p>
+  <p>O diferencial de engenharia é a confiabilidade: o estado de cada execução vive no MySQL. Se o servidor cair no passo 23 de um fluxo de 50, ao voltar o Delco sabe exatamente onde parou e refaz só o passo 23.</p>
+  <h2>Para que serve</h2>
+  <p>Qualquer rotina com várias etapas que precisa rodar sozinha, no horário certo, sem perder o fio quando algo dá errado: ETL e relatórios, integrações com fornecedores instáveis, sincronizações, backups, migrações em lotes, processamento de arquivos e notificações.</p>
+  <h2>O que o Delco faz</h2>
+  <h3>Para quem escreve workflows</h3>
+  <ul>
+    <li>Workflows como código Python, com dependências, agenda cron, fila, tempo limite e retentativas por tarefa.</li>
+    <li>Parâmetros tipados com <code>Param</code>: o painel monta o formulário e todos os caminhos validam do mesmo jeito.</li>
+    <li><code>ctx.skip()</code>, <code>ctx.fail()</code> e <code>retry_on</code> para separar erros passageiros de definitivos.</li>
+    <li>Tempo limite da execução inteira com <code>run_timeout</code>.</li>
+    <li><code>delco new</code> e <code>delco dev run</code> para criar e testar um workflow sem subir nada.</li>
+  </ul>
+  <h3>Para quem opera</h3>
+  <ul>
+    <li>Painel com grafo ao vivo, grade, linha do tempo, logs que chegam enquanto a tarefa roda e quadro de vagas dos workers.</li>
+    <li>Disparo com formulário, reprocessamento de períodos, retomada da falha, marcação manual de tarefas e ações em lote.</li>
+    <li>Pausa de agendas e de workers, tela Sistema, <code>delco doctor</code>, métricas para o Prometheus e healthchecks.</li>
+    <li>Avisos no Slack, Discord, Teams, Google Chat, Telegram, por e-mail e por webhook assinado.</li>
+  </ul>
+  <h3>Para quem administra</h3>
+  <ul>
+    <li>Três papéis (Leitura, Operador e Administrador), tokens pessoais com validade e auditoria com filtros e exportação.</li>
+    <li>Configuração conferida ao subir, limites de chamadas e limpeza automática do histórico.</li>
+  </ul>
+
+  <h2 id="c1-novidades">Novidades da versão 1.2.0</h2>
+  <table>
+    <thead><tr><th>Novidade</th><th>Onde ler</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Parâmetros tipados</strong> com tipo, padrão, opções e limites; formulário no painel e erro por campo na API.</td><td>Capítulo 3</td></tr>
+      <tr><td><strong>Skip, Fail e retry_on</strong>: tarefa pulada pela própria lógica, falha definitiva e retentativas só para erros passageiros.</td><td>Capítulo 3</td></tr>
+      <tr><td><strong>Tempo limite da execução</strong> (<code>run_timeout</code>), com o motivo gravado e aviso às integrações.</td><td>Capítulos 3 e 5</td></tr>
+      <tr><td><strong>delco new e delco dev run</strong>; <code>wf.run_local()</code> para testes.</td><td>Capítulos 3 e 7</td></tr>
+      <tr><td><strong>Versões e código</strong> de cada workflow no painel, com o que mudou entre versões.</td><td>Capítulo 4</td></tr>
+      <tr><td><strong>Reprocessar período</strong> (backfill) com prévia, pelo painel, API e CLI.</td><td>Capítulos 4, 7 e 8</td></tr>
+      <tr><td><strong>Marcar tarefa</strong> como sucesso, falha ou pulada e seguir a execução.</td><td>Capítulo 4</td></tr>
+      <tr><td><strong>Ações em lote</strong> em execuções e agendas; <strong>pausar worker</strong>.</td><td>Capítulo 4</td></tr>
+      <tr><td><strong>Tela Sistema</strong>, <strong>delco doctor</strong>, sinal do agendador, <strong>métricas</strong>, <strong>healthcheck</strong> e logs em JSON.</td><td>Capítulos 4 e 10</td></tr>
+      <tr><td><strong>Telegram, e-mail</strong>, evento <strong>voltou a funcionar</strong>, gatilho assinado, reenvio de entregas e limite de chamadas.</td><td>Capítulo 6</td></tr>
+      <tr><td><strong>Preferências da conta</strong>: tema, cinco paletas de cores, fuso, densidade, itens por página, avisos do navegador.</td><td>Capítulo 4</td></tr>
+      <tr><td><strong>Auditoria</strong> com filtros e CSV; observação editável; exclusão de execuções.</td><td>Capítulos 4 e 11</td></tr>
+      <tr><td>Banco: colunas <code>params_schema</code>, <code>source_code</code>, <code>error</code>, <code>preferences</code> e <code>config</code>; origem <code>backfill</code>; estados <code>paused</code> e <code>skipped</code>.</td><td>Manual do banco de dados</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="c1-tec">Tecnologias</h2>
+  <table>
+    <thead><tr><th>Camada</th><th>Tecnologia</th><th>Papel</th></tr></thead>
+    <tbody>
+      <tr><td>Linguagem</td><td>Python 3.13</td><td>SDK, agendador, workers, API e CLI</td></tr>
+      <tr><td>Framework</td><td>Django 6.1</td><td>Modelos, migrações, comandos de gerenciamento, configuração e segurança</td></tr>
+      <tr><td>API</td><td>Django REST Framework + drf-spectacular</td><td>REST com permissões por papel e documentação OpenAPI/Swagger</td></tr>
+      <tr><td>Servidor</td><td>Daphne (ASGI)</td><td>HTTP e WebSocket no mesmo processo</td></tr>
+      <tr><td>Banco</td><td>MySQL 8.4</td><td>Fonte da verdade de todo o estado</td></tr>
+      <tr><td>Fila</td><td>Redis 7 Streams</td><td>Entrega das tarefas com grupo de consumidores; sinais e limites de chamadas</td></tr>
+      <tr><td>Tempo real</td><td>Django Channels + Redis pub/sub</td><td>Eventos de execução, tarefa, worker e log pelo WebSocket</td></tr>
+      <tr><td>Notificações</td><td>httpx e smtplib</td><td>Webhooks, Telegram e e-mail com tempo limite e assinatura HMAC</td></tr>
+      <tr><td>Painel</td><td>HTML, CSS e JavaScript (sem build)</td><td>Servido pelo próprio Django com WhiteNoise</td></tr>
+      <tr><td>Agenda</td><td>croniter</td><td>Cron com fuso e próximos horários</td></tr>
+      <tr><td>Qualidade</td><td>Pytest, pytest-cov e Ruff</td><td>103 testes com MySQL e Redis reais e lint no CI</td></tr>
+      <tr><td>Execução</td><td>Docker Compose</td><td>MySQL, Redis, API, agendador e workers com healthcheck</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="capitulo" id="c2">
+  <p class="num">Capítulo 2</p>
+  <h1>Como rodar</h1>
+  <h2>Requisitos</h2>
+  <ul>
+    <li>Docker com Docker Compose (Docker Desktop no Windows ou no macOS).</li>
+    <li>Cerca de 1,5 GB livres para as imagens e a porta 8080 livre (troque com <code>DELCO_PORT</code>).</li>
+  </ul>
+  <h2>Primeira execução</h2>
+  <ol>
+    <li>Baixe o repositório (<strong>Code → Download ZIP</strong> no GitHub ou <code>git clone</code>).</li>
+    <li><strong>Windows:</strong> dois cliques em <code>iniciar.cmd</code>. <strong>Linux ou macOS:</strong> <code>./iniciar.sh</code> (ou <code>make subir</code>).</li>
+    <li>Na primeira vez o script cria o <code>.env</code> com senha do MySQL, chave secreta e token de métricas aleatórios.</li>
+    <li>O Docker sobe MySQL, Redis, API, agendador e dois workers, e o painel abre em <strong>http://localhost:8080</strong>.</li>
+    <li>Confira tudo com <code>docker compose exec api delco doctor</code>.</li>
+  </ol>
+  <pre>cp .env.example .env              # troque DELCO_DB_PASSWORD e DELCO_SECRET_KEY
+docker compose up -d --build
+docker compose up -d --scale worker=4
+docker compose exec api delco doctor</pre>
+  <h2>Comandos do dia a dia</h2>
+  <table>
+    <thead><tr><th>Ação</th><th>Comando</th></tr></thead>
+    <tbody>
+      <tr><td>Subir ou atualizar</td><td><code>docker compose up -d --build</code> · <code>make subir</code></td></tr>
+      <tr><td>Acompanhar logs</td><td><code>docker compose logs -f api scheduler worker</code> · <code>make logs</code></td></tr>
+      <tr><td>Mais workers</td><td><code>docker compose up -d --scale worker=4</code></td></tr>
+      <tr><td>Diagnóstico</td><td><code>docker compose exec api delco doctor</code> · <code>make doutor</code></td></tr>
+      <tr><td>Novo workflow</td><td><code>delco new nome</code> · <code>make novo NOME=nome</code></td></tr>
+      <tr><td>Parar</td><td><code>docker compose down</code> (os dados ficam nos volumes)</td></tr>
+      <tr><td>Começar do zero</td><td><code>docker compose down -v</code></td></tr>
+    </tbody>
+  </table>
+  <h2 id="c2-contas">Contas de demonstração</h2>
+  <p>Todas usam a senha <strong>Delco@2026</strong> e existem só para testes. Os nomes são fictícios e os e-mails usam o domínio de exemplo <code>delco.dev</code>.</p>
+  <table>
+    <thead><tr><th>Papel</th><th>E-mail</th><th>Nome</th></tr></thead>
+    <tbody>
+      <tr><td>Administrador</td><td><code>admin@delco.dev</code></td><td>Helena Prado</td></tr>
+      <tr><td>Operador</td><td><code>operador@delco.dev</code></td><td>Tiago Moura</td></tr>
+      <tr><td>Leitura</td><td><code>leitura@delco.dev</code></td><td>Bruna Sales</td></tr>
+    </tbody>
+  </table>
+  <div class="nota aviso">Para usar de verdade, suba com <code>DELCO_SEED=false</code> num banco vazio e crie o administrador com <code>docker compose exec api delco users create --role admin --email voce@empresa.com --name "Seu Nome"</code>. A tela Sistema e o <code>delco doctor</code> avisam se alguma conta de demonstração continuar ativa com a senha pública.</div>
+  <h2>Rodar sem Docker</h2>
+  <pre>pip install -r requirements.txt &amp;&amp; pip install -e .
+export DELCO_DATABASE_URL=mysql://delco:senha@127.0.0.1:3306/delco
+export DELCO_REDIS_URL=redis://127.0.0.1:6379/0
+delco api --port 8080 &amp;     # aplica as migrações ao subir
+delco scheduler &amp;
+delco worker --concurrency 4</pre>
+</section>
+
+<section class="capitulo" id="c3">
+  <p class="num">Capítulo 3</p>
+  <h1>Escrevendo workflows</h1>
+  <h2>Estrutura de um arquivo</h2>
+  <p>Cada arquivo <code>.py</code> da pasta <code>workflows/</code> (ou de <code>DELCO_WORKFLOWS_DIR</code>) define um ou mais objetos <code>Workflow</code>. O agendador relê a pasta a cada 30 segundos; arquivos começando com <code>_</code> são ignorados. O jeito mais rápido de começar é <code>delco new nome --schedule "0 7 * * *"</code>, que cria o arquivo já com parâmetros e duas tarefas.</p>
+  <pre>from delco import Fail, Param, Workflow
+
+vendas = Workflow(
+    "relatorio_vendas",
+    description="Extrai, agrega e publica o relatório do dia.",
+    schedule="0 7 * * *",
+    timezone="America/Sao_Paulo",
+    params={
+        "dias": Param(1, min=1, max=30, description="Quantos dias processar"),
+        "formato": Param("csv", choices=["csv", "xlsx"]),
+    },
+    run_timeout=1800,
+)
+
+@vendas.task(retries=3, timeout=120, retry_on=(ConnectionError, TimeoutError))
+def extrair(ctx):
+    linhas = buscar_pedidos(ctx.params["dias"])
+    if not linhas:
+        ctx.skip("Nenhum pedido no período")
+    return {"linhas": len(linhas)}
+
+@vendas.task(depends_on=[extrair])
+def publicar(ctx):
+    if ctx.upstream["extrair"]["linhas"] &gt; 1_000_000:
+        raise Fail("Volume fora do normal")
+    ctx.log("publicado")</pre>
+  <h2>Opções do workflow</h2>
+  <table>
+    <thead><tr><th>Parâmetro</th><th>Padrão</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><code>name</code></td><td>obrigatório</td><td>Letras minúsculas, números e <code>_</code> (até 63)</td></tr>
+      <tr><td><code>description</code></td><td>vazio</td><td>Texto mostrado no painel</td></tr>
+      <tr><td><code>schedule</code></td><td><code>None</code></td><td>Cron de 5 campos ou <code>@daily</code>, <code>@hourly</code>…; <code>None</code> = só manual</td></tr>
+      <tr><td><code>timezone</code></td><td><code>America/Sao_Paulo</code></td><td>Fuso da agenda</td></tr>
+      <tr><td><code>params</code></td><td><code>{}</code></td><td>Valores simples ou <code>Param(...)</code></td></tr>
+      <tr><td><code>max_active_runs</code></td><td><code>1</code></td><td>Execuções simultâneas; as outras esperam na fila</td></tr>
+      <tr><td><code>run_timeout</code></td><td><code>None</code></td><td>Segundos até a execução inteira ser encerrada como falha</td></tr>
+      <tr><td><code>tags</code></td><td><code>()</code></td><td>Etiquetas para busca</td></tr>
+      <tr><td><code>default_retries</code> · <code>default_retry_delay</code> · <code>default_timeout</code> · <code>default_queue</code></td><td><code>2</code> · <code>5</code> · <code>300</code> · <code>default</code></td><td>Padrões das tarefas</td></tr>
+    </tbody>
+  </table>
+  <h2>Opções da tarefa</h2>
+  <table>
+    <thead><tr><th>Opção</th><th>Padrão</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td><code>depends_on</code></td><td><code>[]</code></td><td>Tarefas (função ou nome) que precisam terminar antes</td></tr>
+      <tr><td><code>retries</code></td><td><code>2</code></td><td>Novas tentativas depois da primeira falha</td></tr>
+      <tr><td><code>retry_delay</code> · <code>backoff</code> · <code>max_retry_delay</code></td><td><code>5</code> · <code>2</code> · <code>600</code></td><td>Espera = <code>retry_delay × backoff^(n-1)</code> com ±10%, até o teto</td></tr>
+      <tr><td><code>retry_on</code></td><td>qualquer erro</td><td>Tupla de exceções que geram nova tentativa; as outras falham de vez</td></tr>
+      <tr><td><code>timeout</code></td><td><code>300</code></td><td>Segundos por tentativa; <code>None</code> = sem limite</td></tr>
+      <tr><td><code>queue</code></td><td><code>default</code></td><td>Fila; os workers escolhem as filas que consomem</td></tr>
+      <tr><td><code>trigger_rule</code></td><td><code>all_success</code></td><td><code>all_done</code> roda sempre; <code>one_failed</code> só se algo falhar</td></tr>
+      <tr><td><code>description</code></td><td>docstring</td><td>Texto da tarefa no painel</td></tr>
+    </tbody>
+  </table>
+  <p>Para gerar tarefas em laço, use <code>wf.add_task(nome, funcao, depends_on=[...])</code>. Funções <code>async def</code> também funcionam.</p>
+  <h2 id="c3-params">Parâmetros tipados</h2>
+  <p><code>Param</code> declara o que cada parâmetro aceita. A mesma regra vale no formulário do painel, na API, na CLI, no gatilho por URL, no reprocessamento e no <code>delco dev run</code>. Erros voltam por campo: <code>{"params.dias": "Precisa ser no máximo 30."}</code>.</p>
+  <table>
+    <thead><tr><th>Argumento</th><th>Descrição</th></tr></thead>
+    <tbody>
+      <tr><td>primeiro argumento</td><td>Valor padrão; sem ele, o parâmetro é obrigatório</td></tr>
+      <tr><td><code>type</code></td><td><code>str</code>, <code>int</code>, <code>float</code>, <code>bool</code>, <code>date</code>, <code>list</code> ou <code>dict</code> (deduzido do padrão)</td></tr>
+      <tr><td><code>choices</code></td><td>Lista de opções (vira um seletor no formulário)</td></tr>
+      <tr><td><code>min</code> · <code>max</code></td><td>Limites de números ou tamanho de textos e listas</td></tr>
+      <tr><td><code>description</code> · <code>label</code></td><td>Ajuda e rótulo do campo</td></tr>
+      <tr><td><code>required</code></td><td>Força obrigatório mesmo com padrão</td></tr>
+      <tr><td><code>secret</code></td><td>Mascara o valor no painel, na API e na auditoria</td></tr>
+    </tbody>
+  </table>
+  <p>Textos vindos da CLI e de formulários são convertidos (<code>"3"</code> vira <code>3</code>, <code>"sim"</code> vira <code>True</code>). Datas chegam à tarefa como <code>"AAAA-MM-DD"</code>. Parâmetros declarados sem <code>Param</code> continuam livres, como nas versões anteriores. Um workflow agendado não pode ter parâmetro obrigatório sem padrão.</p>
+  <h2 id="c3-ctx">O objeto ctx, skip, fail e retry_on</h2>
+  <table>
+    <thead><tr><th>Atributo ou método</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>ctx.params</code></td><td>Parâmetros já validados</td></tr>
+      <tr><td><code>ctx.upstream</code></td><td>Resultado de cada dependência, por nome</td></tr>
+      <tr><td><code>ctx.log(msg, level)</code> · <code>ctx.warning</code> · <code>ctx.error</code></td><td>Linhas de log; <code>print</code> e o <code>logging</code> também viram log</td></tr>
+      <tr><td><code>ctx.progress(50, "metade")</code></td><td>Barra de andamento no painel</td></tr>
+      <tr><td><code>ctx.skip("motivo")</code> ou <code>raise Skip(...)</code></td><td>A tarefa termina como <strong>pulada</strong>; dependentes com <code>all_success</code> também são puladas e a execução conta como sucesso</td></tr>
+      <tr><td><code>ctx.fail("motivo")</code> ou <code>raise Fail(...)</code></td><td>Falha definitiva, sem retentativas (<code>retry=True</code> para repetir)</td></tr>
+      <tr><td><code>ctx.idempotency_key</code></td><td>Igual em todas as tentativas: use para não repetir efeitos externos</td></tr>
+      <tr><td><code>ctx.logical_date</code> · <code>ctx.attempt</code> · <code>ctx.is_retry</code> · <code>ctx.is_last_attempt</code></td><td>Horário agendado (ou do reprocessamento) e tentativa atual</td></tr>
+    </tbody>
+  </table>
+  <div class="nota">Com <code>retry_on=(ConnectionError, TimeoutError)</code>, uma queda de rede é repetida, mas um <code>KeyError</code> por erro de código falha na hora, sem esperar as retentativas. O log da tentativa avisa: “Erro marcado como definitivo”.</div>
+  <h2 id="c3-local">Testar sem servidor</h2>
+  <pre>delco dev run relatorio_vendas -p dias=3          # roda aqui, na ordem, com logs
+delco dev run relatorio_vendas --no-retries --output
+delco dev run relatorio_vendas --json            # para scripts
+delco validate workflows                         # confere os arquivos</pre>
+  <p>O <code>delco dev run</code> não precisa de MySQL, Redis nem workers: executa as tarefas no próprio processo, respeitando dependências, regras de disparo, <code>skip</code>, <code>Fail</code> e retentativas (sem a espera). Dentro dos seus testes, <code>vendas.run_local({"dias": 3})</code> devolve o estado, as tentativas, os logs e o resultado de cada tarefa.</p>
+  <h2>Versões</h2>
+  <p>O Delco calcula uma impressão digital do grafo (tarefas, dependências e opções). Quando ela muda, nasce uma versão nova; cada execução guarda a versão com que começou. O código do arquivo também fica guardado e aparece na aba <strong>Código</strong>. Mudar só o corpo de uma função não cria versão.</p>
+  <p>Exemplos prontos: <code>ola_delco</code>, <code>relatorio_vendas_diario</code> (leque paralelo, parâmetros, <code>skip</code>, <code>Fail</code> e <code>retry_on</code>), <code>sincronizar_catalogo</code>, <code>backup_noturno</code> (fila <code>critical</code> e <code>run_timeout</code>) e <code>migracao_em_50_passos</code>.</p>
+</section>
+
+<section class="capitulo" id="c4">
+  <p class="num">Capítulo 4</p>
+  <h1>Guia das telas</h1>
+  <p>O painel tem uma barra lateral com Visão geral, Workflows, Execuções, Workers, Desempenho, Integrações, Sistema e a documentação da API. <code>Ctrl K</code> (ou <code>⌘K</code>) abre a paleta de comandos e <code>?</code> lista os atalhos. Se nenhum agendador estiver ativo, um aviso aparece no topo de todas as telas.</p>
+  <h2>Entrada</h2>
+  <figure><img src="../images/tela-entrada.png"><figcaption>Entrada com as contas de demonstração</figcaption></figure>
+  <h2>Visão geral</h2>
+  <p>O quadro <strong>Agora</strong> mostra cada worker e suas vagas, acesas quando uma tarefa está rodando (workers pausados aparecem com as vagas tracejadas). Abaixo, indicadores de 24 horas, tarefas por hora, próximas execuções e as execuções recentes.</p>
+  <figure><img src="../images/tela-painel.png"><figcaption>Visão geral</figcaption></figure>
+  <h2 id="c4-workflows">Workflows</h2>
+  <p>A lista mostra agenda, últimas execuções e taxa de sucesso. Marque vários para <strong>pausar ou retomar as agendas</strong> de uma vez.</p>
+  <figure><img src="../images/tela-workflows.png"><figcaption>Lista de workflows com seleção em lote</figcaption></figure>
+  <h3>Detalhe do workflow</h3>
+  <p>Fatos (agenda, próxima execução, versão, arquivo, limites) e as abas <strong>Grade</strong>, <strong>Grafo</strong>, <strong>Tarefas e parâmetros</strong>, <strong>Execuções</strong>, <strong>Versões</strong> e <strong>Código</strong>. A aba aberta fica no endereço da página, para compartilhar o link.</p>
+  <figure><img src="../images/tela-grade.png"><figcaption>Grade: cada coluna é uma execução e cada linha, uma tarefa</figcaption></figure>
+  <figure><img src="../images/tela-grafo-workflow.png"><figcaption>Grafo de dependências; clicar numa tarefa abre o código dela</figcaption></figure>
+  <figure><img src="../images/tela-tarefas-parametros.png"><figcaption>Tarefas e parâmetros: tipos, padrões, regras e retentativas</figcaption></figure>
+  <figure><img src="../images/tela-versoes.png"><figcaption>Versões: o que entrou (+), saiu (−) e mudou (~) em cada versão</figcaption></figure>
+  <figure><img src="../images/tela-codigo.png"><figcaption>Código do arquivo com destaque de sintaxe e salto para cada tarefa</figcaption></figure>
+  <h3>Executar e reprocessar</h3>
+  <p><strong>Executar</strong> abre um formulário montado a partir dos parâmetros (ou um editor JSON, para quem prefere). Erros aparecem embaixo de cada campo. <strong>Reprocessar período</strong> (workflows com agenda) mostra quantos horários existem entre as datas, quais já têm execução e cria uma execução por horário, com a data lógica certa.</p>
+  <figure><img src="../images/tela-parametros.png"><figcaption>Executar workflow com formulário de parâmetros</figcaption></figure>
+  <figure><img src="../images/tela-reprocessar.png"><figcaption>Reprocessar período com prévia</figcaption></figure>
+  <h2 id="c4-exec">Execuções</h2>
+  <p>Filtros por estado, workflow, origem (inclusive <strong>Reprocessamento</strong>) e período, busca por número ou observação e <strong>Exportar CSV</strong>. Marque execuções para <strong>cancelar</strong>, <strong>retomar da falha</strong> ou <strong>excluir</strong> (administrador) em lote. O tamanho da página segue a preferência da conta.</p>
+  <figure><img src="../images/tela-execucoes.png"><figcaption>Execuções com filtros</figcaption></figure>
+  <figure><img src="../images/tela-lote.png"><figcaption>Barra de ações em lote</figcaption></figure>
+  <h3>Execução</h3>
+  <p>Grafo ao vivo, tarefas, linha do tempo e parâmetros. O motivo da falha da execução (como o tempo limite) aparece em destaque e a duração vem comparada com a mediana das execuções anteriores (“12% mais lenta”). A observação pode ser editada pelo lápis, e o administrador pode excluir uma execução terminada.</p>
+  <figure><img src="../images/tela-execucao.png"><figcaption>Execução de 50 passos em andamento</figcaption></figure>
+  <h3>Gaveta da tarefa</h3>
+  <p>Log ao vivo com busca, filtro por nível, <strong>acompanhar o fim</strong>, <strong>quebrar linhas</strong>, <strong>ir para o primeiro erro</strong>, copiar e baixar. Abas de resultado e tentativas, com traceback. Em execuções terminadas, o operador pode <strong>reexecutar a partir desta tarefa</strong> ou <strong>marcar como sucesso, falha ou pulada</strong>: marcar como sucesso devolve à fila as tarefas que tinham sido puladas por causa dela, e a execução continua.</p>
+  <figure><img src="../images/tela-tarefa.png"><figcaption>Gaveta da tarefa</figcaption></figure>
+  <figure><img src="../images/tela-falha.png"><figcaption>Tentativas de uma tarefa que falhou</figcaption></figure>
+  <h2>Workers</h2>
+  <p>Cada worker com suas vagas e o que está rodando, e as filas no MySQL e no Redis. <strong>Pausar</strong> faz o worker terminar o que está rodando e parar de pegar tarefas novas; <strong>Retomar</strong> o devolve ao trabalho.</p>
+  <figure><img src="../images/tela-workers.png"><figcaption>Quadro de vagas e filas</figcaption></figure>
+  <h2>Desempenho</h2>
+  <figure><img src="../images/tela-desempenho.png"><figcaption>Taxa de sucesso, p50 e p95 por workflow, tarefas que mais falham e mais lentas</figcaption></figure>
+  <h2>Integrações</h2>
+  <figure><img src="../images/tela-integracoes.png"><figcaption>Notificações e gatilhos de entrada</figcaption></figure>
+  <h2 id="c4-sistema">Sistema</h2>
+  <p>Só para administradores. Resume a saúde (tudo certo, avisos ou problemas), mostra MySQL, Redis, agendadores e workers, lista as verificações com o que fazer em cada aviso, os agendadores com seu último sinal e erro, a configuração em uso (senhas mascaradas), o exemplo de configuração do Prometheus e o botão <strong>Rodar limpeza agora</strong>.</p>
+  <figure><img src="../images/tela-sistema.png"><figcaption>Tela Sistema</figcaption></figure>
+  <h2 id="c4-conta">Minha conta, preferências e paletas</h2>
+  <p>As preferências ficam na conta e valem em qualquer navegador: tema (sistema, claro ou escuro), <strong>paleta de cores</strong>, datas no horário local ou em UTC, densidade das tabelas, execuções por página, avisos do navegador (falhas e execuções que você disparou) e quebra de linha nos logs. A paleta tem cinco opções, escolhidas pelas amostras de cor:</p>
+  <p><span class="pal"><span style="background:#f7f3f1"></span><span style="background:#4c6170"></span><span style="background:#1f292f"></span><span style="background:#56663f"></span></span><span class="pal"><span style="background:#e6ddce"></span><span style="background:#5d1c16"></span><span style="background:#7a6e46"></span><span style="background:#f6e4a6"></span></span><span class="pal"><span style="background:#f5f4f4"></span><span style="background:#000000"></span><span style="background:#2b4c5a"></span><span style="background:#e2c288"></span></span><span class="pal"><span style="background:#f3f1ec"></span><span style="background:#a8235a"></span><span style="background:#3e6f84"></span><span style="background:#2e7d5b"></span></span><span class="pal"><span style="background:#e8e8e8"></span><span style="background:#000000"></span><span style="background:#ab9d9d"></span><span style="background:#5c5454"></span></span></p>
+  <p>Cada paleta tem versão clara e escura; a marca preta e branca do Delco não muda. A primeira é a paleta original do Delco.</p>
+  <figure><img src="../images/tela-conta.png"><figcaption>Minha conta: preferências, senha e tokens pessoais</figcaption></figure>
+  <h2>Usuários e auditoria</h2>
+  <p>Administradores criam e editam usuários e consultam a auditoria com filtros por ação, pessoa, período e busca, com paginação e exportação em CSV.</p>
+  <h2>Paleta de comandos e atalhos</h2>
+  <p><code>Ctrl K</code> busca telas, workflows e execuções (<code>#118</code>) e executa ações: executar workflow, trocar tema, trocar a paleta de cores, preferências, pausar ou retomar todas as agendas. Atalhos: <code>g v</code>, <code>g w</code>, <code>g e</code>, <code>g k</code>, <code>g d</code>, <code>g i</code>, <code>g c</code>, <code>g u</code>, <code>g s</code>, <code>/</code> para buscar e <code>x</code> para executar.</p>
+  <figure><img src="../images/tela-comandos.png"><figcaption>Paleta de comandos</figcaption></figure>
+  <figure><img src="../images/tela-escuro.png"><figcaption>Tema escuro</figcaption></figure>
+</section>
+
+<section class="capitulo" id="c5">
+  <p class="num">Capítulo 5</p>
+  <h1>Arquitetura</h1>
+  <figure class="diagrama largo"><img src="diagramas/arquitetura.svg"><figcaption>Processos e fluxos de dados</figcaption></figure>
+  <table>
+    <thead><tr><th>Processo</th><th>Comando</th><th>Responsabilidade</th></tr></thead>
+    <tbody>
+      <tr><td>API</td><td><code>delco api</code></td><td>Daphne com o Django: REST, WebSocket, painel, Swagger, métricas e migrações</td></tr>
+      <tr><td>Agendador</td><td><code>delco scheduler</code></td><td>Lê a pasta (e guarda o código), cria execuções agendadas, libera tarefas, encerra execuções que passaram do tempo limite, recupera leases vencidos, republica mensagens perdidas, envia notificações e manda sinal de vida ao Redis a cada 5 s</td></tr>
+      <tr><td>Worker</td><td><code>delco worker</code></td><td>Consome as filas, assume cada tarefa no banco e roda a tentativa num processo filho com heartbeat, tempo limite e cancelamento; obedece a pausas</td></tr>
+    </tbody>
+  </table>
+  <h2>Ciclo de vida de uma tarefa</h2>
+  <figure class="diagrama"><img src="diagramas/estados-tarefa.svg"><figcaption>Estados de task_instances.status</figcaption></figure>
+  <ol>
+    <li>O agendador marca a tarefa como <strong>na fila</strong> no MySQL e só depois publica no Redis.</li>
+    <li>O worker trava a linha com <code>select_for_update()</code> e <code>status='queued'</code>; mensagem repetida não encontra mais a tarefa na fila.</li>
+    <li>A cada heartbeat o worker renova o lease. Se o servidor cair, o lease vence e a tarefa volta para nova tentativa.</li>
+    <li>O processo filho devolve resultado, erro (com a indicação se pode ser repetido) ou <em>skip</em>.</li>
+    <li>Tarefas terminadas guardam o resultado e não rodam de novo: só o passo interrompido é refeito.</li>
+  </ol>
+  <h2>Confiabilidade e retomada</h2>
+  <ul>
+    <li><strong>MySQL é a fonte da verdade</strong>; o Redis é só transporte.</li>
+    <li><strong>Compare-and-set</strong> em toda transição; <code>FOR UPDATE SKIP LOCKED</code> deixa vários agendadores trabalharem juntos.</li>
+    <li><strong>Chave única por horário</strong> impede duas execuções agendadas no mesmo horário.</li>
+    <li><strong>Mensagens perdidas</strong> são republicadas; o Redis pode ser apagado sem perda.</li>
+    <li><strong>Worker pausado</strong> devolve à fila mensagens que já tinha lido.</li>
+    <li><strong>Tempo limite da execução</strong>: o agendador confere a cada ciclo de recuperação, cancela o que falta, pede parada ao que roda e grava o motivo.</li>
+  </ul>
+  <h2>Sinais de vida</h2>
+  <p>Workers gravam o heartbeat no MySQL. Agendadores gravam um sinal com validade no Redis (<code>delco:scheduler:&lt;id&gt;</code>), com ciclos, última leitura da pasta e último erro. A API usa esse sinal na saúde, no aviso do painel e na tela Sistema. Cada processo também escreve um arquivo de saúde usado pelo <code>delco healthcheck</code>.</p>
+</section>
+
+<section class="capitulo" id="c6">
+  <p class="num">Capítulo 6</p>
+  <h1>Integrações</h1>
+  <table>
+    <thead><tr><th>Tipo</th><th>Para que serve</th><th>O que configurar</th></tr></thead>
+    <tbody>
+      <tr><td>Slack · Discord · Teams · Google Chat</td><td>Mensagem num canal</td><td>URL do webhook do canal</td></tr>
+      <tr><td>Telegram</td><td>Mensagem num grupo ou canal</td><td>Token do bot (BotFather) e ID do chat</td></tr>
+      <tr><td>E-mail</td><td>Mensagem para uma lista</td><td>Destinatários; servidor em <code>DELCO_SMTP_*</code></td></tr>
+      <tr><td>Webhook genérico</td><td>Avisar outro sistema</td><td>URL; o corpo é JSON assinado com HMAC-SHA256</td></tr>
+      <tr><td>Gatilho por URL</td><td>Disparar um workflow de fora</td><td>Workflow e, se quiser, exigir assinatura</td></tr>
+    </tbody>
+  </table>
+  <h2>Eventos</h2>
+  <table>
+    <thead><tr><th>Evento</th><th>Quando</th></tr></thead>
+    <tbody>
+      <tr><td><code>run.started</code></td><td>A execução saiu da fila</td></tr>
+      <tr><td><code>run.succeeded</code></td><td>Terminou com sucesso</td></tr>
+      <tr><td><code>run.failed</code></td><td>Terminou com falha (inclusive tempo limite da execução)</td></tr>
+      <tr><td><code>run.cancelled</code></td><td>Foi cancelada</td></tr>
+      <tr><td><code>run.recovered</code></td><td>Terminou com sucesso logo depois de uma execução com falha do mesmo workflow</td></tr>
+    </tbody>
+  </table>
+  <p>A entrega nasce na mesma transação que muda o estado da execução; o agendador envia e, se o destino recusar, tenta de novo até 5 vezes (10 s, 20 s, 40 s e 80 s). <strong>Enviar teste</strong> confere a configuração e entregas que desistiram podem ser <strong>reenviadas</strong> pelo histórico. As mensagens trazem as tarefas que falharam e o motivo.</p>
+  <h2>Webhook genérico</h2>
+  <pre>POST https://seu-sistema/delco
+X-Delco-Event: run.failed
+X-Delco-Delivery: 42
+X-Delco-Signature: sha256=&lt;HMAC-SHA256 do corpo com o segredo&gt;
+
+{"event": "run.failed", "run": {"id": 118, "workflow": "sincronizar_catalogo", "status": "failed",
+ "error": null, "failed_tasks": ["aplicar_lote_2"], "tasks_total": 7, "tasks_failed": 1, "url": "…"}}</pre>
+  <h2>Gatilho por URL</h2>
+  <p>A URL aparece uma única vez (só o SHA-256 do token fica no banco). Com <strong>Exigir assinatura</strong>, o Delco mostra também um segredo e recusa chamadas sem <code>X-Delco-Signature</code> ou <code>X-Hub-Signature-256</code> (o formato dos webhooks do GitHub). Cada gatilho aceita até <code>DELCO_HOOK_RATE_LIMIT</code> chamadas por minuto.</p>
+  <pre>BODY='{"params": {"pasta_saida": "/tmp/rel"}, "note": "Build 42"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$DELCO_HOOK_SECRET" | cut -d' ' -f2)
+curl -X POST "$DELCO_HOOK_URL" -H 'Content-Type: application/json' \
+  -H "X-Delco-Signature: sha256=$SIG" -d "$BODY"</pre>
+  <h2>E-mail</h2>
+  <p>Configure <code>DELCO_SMTP_HOST</code>, <code>DELCO_SMTP_PORT</code>, <code>DELCO_SMTP_USER</code>, <code>DELCO_SMTP_PASSWORD</code>, <code>DELCO_SMTP_FROM</code> e <code>DELCO_SMTP_SECURITY</code> (<code>starttls</code>, <code>ssl</code> ou <code>none</code>). A mensagem sai em texto e HTML, com o link para a execução.</p>
+</section>
+
+<section class="capitulo" id="c7">
+  <p class="num">Capítulo 7</p>
+  <h1>Linha de comando</h1>
+  <h2>Comandos de servidor e ferramentas</h2>
+  <table>
+    <thead><tr><th>Comando</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>delco api</code> · <code>scheduler</code> · <code>worker</code></td><td>Sobem os processos (também como <code>python manage.py ...</code>)</td></tr>
+      <tr><td><code>delco migrate</code> · <code>seed</code> · <code>users create</code></td><td>Banco, dados de demonstração e usuários</td></tr>
+      <tr><td><code>delco new nome [--schedule]</code></td><td>Cria um workflow a partir do modelo</td></tr>
+      <tr><td><code>delco dev run nome [-p] [--json]</code></td><td>Roda o workflow no terminal</td></tr>
+      <tr><td><code>delco validate [pasta]</code></td><td>Confere os arquivos</td></tr>
+      <tr><td><code>delco doctor [--json] [--strict]</code></td><td>Diagnóstico completo; código 1 se houver problema</td></tr>
+      <tr><td><code>delco config [--json]</code></td><td>Configuração em uso, segredos mascarados</td></tr>
+      <tr><td><code>delco healthcheck api|scheduler|worker</code></td><td>Usado pelo Docker</td></tr>
+    </tbody>
+  </table>
+  <h2>Comandos de cliente</h2>
+  <p>Falam com a API usando o token salvo por <code>delco login</code> ou <code>DELCO_URL</code> e <code>DELCO_TOKEN</code>. Os de lista aceitam <code>--json</code>.</p>
+  <table>
+    <thead><tr><th>Comando</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>delco workflows</code> · <code>show nome</code> · <code>versions nome</code></td><td>Lista, detalhe com parâmetros e histórico de versões</td></tr>
+      <tr><td><code>delco trigger nome -p k=v [--wait] [--dry-run]</code></td><td>Dispara (ou só valida os parâmetros)</td></tr>
+      <tr><td><code>delco backfill nome --from D --to D [--dry-run] [--all]</code></td><td>Reprocessa um período</td></tr>
+      <tr><td><code>delco runs [--status] [--trigger] [--since] [-q]</code></td><td>Lista execuções</td></tr>
+      <tr><td><code>delco run id</code> · <code>logs id tarefa [-f] [--level]</code></td><td>Detalhe e log (acompanhando ao vivo)</td></tr>
+      <tr><td><code>delco cancel</code> · <code>retry [--from]</code> · <code>mark --status</code> · <code>note</code></td><td>Ações sobre execuções e tarefas</td></tr>
+      <tr><td><code>delco pause</code> · <code>resume</code></td><td>Agenda de um workflow</td></tr>
+      <tr><td><code>delco workers [pause|resume id]</code></td><td>Lista, pausa e retoma workers</td></tr>
+      <tr><td><code>delco upcoming</code> · <code>integrations</code> · <code>export arquivo.csv</code></td><td>Próximas execuções, integrações e CSV</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="capitulo" id="c8">
+  <p class="num">Capítulo 8</p>
+  <h1>API</h1>
+  <p>Todas as rotas ficam em <code>/api</code>, respondem JSON e exigem <code>Authorization: Bearer &lt;token&gt;</code>, exceto login, saúde e o gatilho por URL. A documentação interativa fica em <code>/api/docs</code> e o esquema em <code>/api/openapi.json</code>.</p>
+  <table>
+    <thead><tr><th>Grupo</th><th>Rotas</th><th>Papel</th></tr></thead>
+    <tbody>
+      <tr><td>Acesso</td><td><code>POST /auth/login</code> · <code>/auth/logout</code> · <code>GET /auth/me</code> · <code>PUT /auth/me/password</code> · <code>GET</code>/<code>PATCH /auth/me/preferences</code> · <code>/tokens</code></td><td>todos</td></tr>
+      <tr><td>Workflows</td><td><code>GET /workflows</code> · <code>/workflows/{n}</code> · <code>/grid</code> · <code>/versions</code> · <code>/source</code></td><td>leitura</td></tr>
+      <tr><td></td><td><code>POST /workflows/{n}/runs</code> (com <code>dry_run</code>) · <code>/backfill</code> · <code>/pause</code> · <code>/resume</code> · <code>POST /workflows/bulk</code></td><td>operador</td></tr>
+      <tr><td>Execuções</td><td><code>GET /runs</code> · <code>/runs/export</code> · <code>/runs/{id}</code> · <code>/runs/{id}/tasks/{t}</code> · <code>/attempts/{id}/logs</code></td><td>leitura</td></tr>
+      <tr><td></td><td><code>PATCH /runs/{id}</code> · <code>POST /cancel</code> · <code>/retry</code> · <code>/tasks/{t}/mark</code> · <code>POST /runs/bulk</code></td><td>operador</td></tr>
+      <tr><td></td><td><code>DELETE /runs/{id}</code> · <code>bulk</code> com <code>delete</code></td><td>admin</td></tr>
+      <tr><td>Monitoramento</td><td><code>/overview</code> · <code>/insights</code> · <code>/upcoming</code> · <code>/workers</code> · <code>/queues</code> · <code>/health</code> · <code>/metrics</code> · <code>WS /ws</code></td><td>leitura</td></tr>
+      <tr><td></td><td><code>POST /workers/{id}/pause</code> · <code>/resume</code></td><td>operador</td></tr>
+      <tr><td>Integrações</td><td><code>/integrations</code> · <code>/{id}</code> · <code>/test</code> · <code>/deliveries</code> · <code>/deliveries/{d}/retry</code> · <code>POST /hooks/{token}</code></td><td>operador / admin</td></tr>
+      <tr><td>Administração</td><td><code>/users</code> · <code>/audit</code> · <code>/audit/export</code> · <code>GET /system</code> · <code>POST /system/housekeeping</code></td><td>admin</td></tr>
+    </tbody>
+  </table>
+  <h2>Erros</h2>
+  <pre>{"code": "validation_error", "message": "Confira os parâmetros destacados.",
+ "fields": {"params.dias": "Precisa ser no máximo 30."}}</pre>
+  <table>
+    <thead><tr><th>Status</th><th>Código</th><th>Quando</th></tr></thead>
+    <tbody>
+      <tr><td>401</td><td><code>unauthenticated</code> · <code>invalid_token</code> · <code>invalid_signature</code></td><td>Sem token, token inválido ou gatilho sem assinatura</td></tr>
+      <tr><td>403</td><td><code>forbidden</code></td><td>Papel sem permissão</td></tr>
+      <tr><td>404</td><td><code>not_found</code></td><td>Recurso não existe</td></tr>
+      <tr><td>409</td><td><code>conflict</code></td><td>Ação impossível no estado atual</td></tr>
+      <tr><td>422</td><td><code>validation_error</code></td><td>Campos inválidos</td></tr>
+      <tr><td>423</td><td><code>locked</code></td><td>Conta bloqueada por erros de senha</td></tr>
+      <tr><td>429</td><td><code>rate_limited</code></td><td>Limite de chamadas por minuto</td></tr>
+    </tbody>
+  </table>
+  <h2>Exemplos</h2>
+  <pre>curl -s -X POST localhost:8080/api/workflows/relatorio_vendas_diario/backfill \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"start": "2026-10-01", "end": "2026-10-07", "dry_run": true}'
+
+curl -s -X POST localhost:8080/api/runs/118/tasks/extrair_pedidos/mark \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"status": "succeeded"}'</pre>
+</section>
+
+<section class="capitulo" id="c9">
+  <p class="num">Capítulo 9</p>
+  <h1>Configuração</h1>
+  <p>Tudo vem das variáveis <code>DELCO_*</code> (modelo em <code>.env.example</code>). Ao subir, cada valor é conferido; se houver problemas, o processo para e lista todos de uma vez, como “DELCO_LEASE_SECONDS precisa ser pelo menos o dobro de DELCO_HEARTBEAT_SECONDS”.</p>
+  <table>
+    <thead><tr><th>Variável</th><th>Padrão</th><th>Para que serve</th></tr></thead>
+    <tbody>
+      <tr><td><code>DELCO_ENVIRONMENT</code></td><td><code>development</code></td><td><code>production</code> liga os avisos de produção</td></tr>
+      <tr><td><code>DELCO_DATABASE_URL</code></td><td>local</td><td><code>mysql://usuario:senha@host:3306/banco</code></td></tr>
+      <tr><td><code>DELCO_REDIS_URL</code></td><td>local</td><td><code>redis://host:6379/0</code></td></tr>
+      <tr><td><code>DELCO_SECRET_KEY</code></td><td>sorteada</td><td>Chave do Django</td></tr>
+      <tr><td><code>DELCO_ALLOWED_HOSTS</code> · <code>DELCO_PUBLIC_URL</code></td><td><code>*</code> · localhost</td><td>Domínio do painel e links das notificações</td></tr>
+      <tr><td><code>DELCO_SEED</code></td><td><code>true</code></td><td>Demonstração num banco vazio</td></tr>
+      <tr><td><code>DELCO_WORKFLOWS_DIR</code> · <code>DELCO_TIMEZONE</code></td><td><code>workflows/</code> · São Paulo</td><td>Pasta e fuso padrão</td></tr>
+      <tr><td><code>DELCO_WORKER_QUEUES</code> · <code>DELCO_WORKER_CONCURRENCY</code></td><td><code>default</code> · <code>4</code></td><td>Filas e vagas por worker</td></tr>
+      <tr><td><code>DELCO_HEARTBEAT_SECONDS</code> · <code>DELCO_LEASE_SECONDS</code></td><td><code>5</code> · <code>30</code></td><td>Sinal e posse das tarefas</td></tr>
+      <tr><td><code>DELCO_REDELIVER_AFTER_SECONDS</code> · <code>DELCO_WORKER_GRACE_SECONDS</code></td><td><code>60</code> · <code>30</code></td><td>Republicação e desligamento gracioso</td></tr>
+      <tr><td><code>DELCO_TICK_SECONDS</code> · <code>DELCO_SYNC_SECONDS</code> · <code>DELCO_RECOVERY_SECONDS</code></td><td><code>1</code> · <code>30</code> · <code>5</code></td><td>Ritmo do agendador</td></tr>
+      <tr><td><code>DELCO_RETENTION_DAYS</code></td><td><code>30</code></td><td>Histórico guardado</td></tr>
+      <tr><td><code>DELCO_MAX_OUTPUT_BYTES</code> · <code>DELCO_MAX_LOG_LINES</code></td><td>1 MiB · <code>5000</code></td><td>Limites por tentativa</td></tr>
+      <tr><td><code>DELCO_SESSION_HOURS</code> · <code>DELCO_LOGIN_MAX_FAILURES</code> · <code>DELCO_LOGIN_LOCK_MINUTES</code></td><td><code>12</code> · <code>5</code> · <code>5</code></td><td>Sessão e bloqueio</td></tr>
+      <tr><td><code>DELCO_LOGIN_RATE_LIMIT</code> · <code>DELCO_HOOK_RATE_LIMIT</code></td><td><code>30</code> · <code>60</code></td><td>Chamadas por minuto (0 desliga)</td></tr>
+      <tr><td><code>DELCO_METRICS_TOKEN</code></td><td>vazio</td><td>Token aceito em <code>/api/metrics</code></td></tr>
+      <tr><td><code>DELCO_MAX_BACKFILL_RUNS</code></td><td><code>366</code></td><td>Limite de um reprocessamento</td></tr>
+      <tr><td><code>DELCO_WEBHOOK_TIMEOUT</code></td><td><code>10</code></td><td>Espera pelos destinos</td></tr>
+      <tr><td><code>DELCO_SMTP_*</code></td><td>vazio</td><td>Servidor de e-mail</td></tr>
+      <tr><td><code>DELCO_TELEGRAM_API_URL</code></td><td>API oficial</td><td>Para proxies</td></tr>
+      <tr><td><code>DELCO_LOG_LEVEL</code> · <code>DELCO_LOG_FORMAT</code></td><td><code>INFO</code> · <code>text</code></td><td>Logs em texto ou JSON</td></tr>
+      <tr><td><code>DELCO_HEALTH_DIR</code></td><td>pasta temporária</td><td>Arquivos do healthcheck</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="capitulo" id="c10">
+  <p class="num">Capítulo 10</p>
+  <h1>Operação em produção</h1>
+  <h2>Checklist</h2>
+  <ul>
+    <li><code>DELCO_ENVIRONMENT=production</code>, <code>DELCO_SEED=false</code>, <code>DELCO_SECRET_KEY</code> longa, <code>DELCO_ALLOWED_HOSTS</code> e <code>DELCO_PUBLIC_URL</code> com o domínio real.</li>
+    <li>HTTPS num proxy reverso (Nginx, Caddy, Traefik) repassando <code>X-Forwarded-Proto</code> e o WebSocket em <code>/api/ws</code>.</li>
+    <li>Contas de demonstração desativadas ou com outra senha; <code>delco doctor --strict</code> sem avisos.</li>
+    <li>Backup diário do MySQL (o Redis pode ser perdido sem perda de dados).</li>
+  </ul>
+  <h2>Diagnóstico</h2>
+  <pre>docker compose exec api delco doctor
+CONFIGURAÇÃO
+  ✓ Chave secreta: Definida em DELCO_SECRET_KEY.
+PROCESSOS
+  ✓ Agendador: 1 ativo(s): api-1
+  ! Filas sem worker: Nenhum worker online consome: relatorios
+      → Inclua a fila em DELCO_WORKER_QUEUES de algum worker.</pre>
+  <h2>Métricas</h2>
+  <pre>scrape_configs:
+  - job_name: delco
+    metrics_path: /api/metrics
+    authorization:
+      credentials: &lt;DELCO_METRICS_TOKEN&gt;
+    static_configs:
+      - targets: ["delco.suaempresa.com"]</pre>
+  <p>Séries: <code>delco_runs_active</code>, <code>delco_runs_finished_24h</code>, <code>delco_workflow_last_success_timestamp_seconds</code>, <code>delco_tasks</code>, <code>delco_workers</code>, <code>delco_worker_slots</code>, <code>delco_worker_slots_busy</code>, <code>delco_schedulers</code>, <code>delco_deliveries</code>, <code>delco_workflow_paused</code> e <code>delco_workflow_load_errors</code>. Um bom alerta: <code>delco_schedulers == 0</code> por 2 minutos.</p>
+  <h2>Healthchecks, escala e manutenção</h2>
+  <ul>
+    <li>O <code>docker-compose.yml</code> usa <code>delco healthcheck</code> na API, no agendador e nos workers.</li>
+    <li>Escale workers com <code>--scale worker=N</code> e separe filas pesadas com <code>DELCO_WORKER_QUEUES</code>.</li>
+    <li>Antes de mexer numa máquina, <strong>pause o worker</strong> pelo painel ou com <code>delco workers pause id</code>.</li>
+    <li>Atualizações: <code>git pull</code> e <code>docker compose up -d --build</code>; a API aplica as migrações com trava.</li>
+    <li>Logs em JSON com <code>DELCO_LOG_FORMAT=json</code>, prontos para Loki, Elastic ou Datadog.</li>
+  </ul>
+</section>
+
+<section class="capitulo" id="c11">
+  <p class="num">Capítulo 11</p>
+  <h1>Segurança</h1>
+  <table>
+    <thead><tr><th>Regra</th><th>Como funciona</th></tr></thead>
+    <tbody>
+      <tr><td>Senhas</td><td>scrypt do Django, mínimo de 8 caracteres com letras e números, bloqueio depois de erros seguidos</td></tr>
+      <tr><td>Tokens</td><td>Opacos; só o SHA-256 fica no banco; validade e revogação</td></tr>
+      <tr><td>Limite de chamadas</td><td>Login por IP e gatilho por token, com contagem no Redis</td></tr>
+      <tr><td>Papéis</td><td>Leitura, Operador e Administrador em cada rota</td></tr>
+      <tr><td>Integrações</td><td>URLs e token do bot ocultos; webhook assinado; gatilho com assinatura opcional</td></tr>
+      <tr><td>Parâmetros secretos</td><td><code>Param(secret=True)</code> mascara o valor no painel, na API e na auditoria</td></tr>
+      <tr><td>Isolamento</td><td>Cada tentativa num processo filho com grupo próprio</td></tr>
+      <tr><td>Auditoria</td><td>Toda ação que muda algo, com filtros e CSV, por 180 dias</td></tr>
+      <tr><td>Cabeçalhos</td><td>CSP, <code>X-Frame-Options</code>, <code>nosniff</code>, <code>Cache-Control: no-store</code> na API</td></tr>
+      <tr><td>Verificações</td><td>Tela Sistema e <code>delco doctor</code> apontam contas de demonstração, chave e domínios de produção</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="capitulo" id="c12">
+  <p class="num">Capítulo 12</p>
+  <h1>Testes e qualidade</h1>
+  <p>São 103 testes com MySQL e Redis reais e cobertura acima de 90%. Eles sobem workers e agendadores de verdade e cobrem a retomada no passo 23 de 50, mensagens perdidas e repetidas, Redis apagado, agendadores concorrentes, parâmetros tipados, <code>skip</code>, <code>Fail</code>, <code>retry_on</code>, tempo limite da execução, reprocessamento, marcação manual, ações em lote, versões, worker pausado, métricas, <code>delco doctor</code>, preferências, auditoria, limites de chamadas, e-mail por SMTP, Telegram, “voltou a funcionar” e gatilho assinado.</p>
+  <pre>python -m pytest              # suíte completa
+ruff check .                  # lint
+make lint                     # Ruff e sintaxe do painel</pre>
+  <p>O CI roda Ruff, a sintaxe do JavaScript, os workflows de exemplo com <code>delco dev run</code>, a suíte com MySQL 8.4 e Redis, e monta e testa a imagem Docker. O Dependabot propõe atualizações semanais.</p>
+</section>
+
+<section class="capitulo" id="c13">
+  <p class="num">Capítulo 13</p>
+  <h1>Solução de problemas</h1>
+  <table>
+    <thead><tr><th>Sintoma</th><th>Causa provável e solução</th></tr></thead>
+    <tbody>
+      <tr><td>Aviso “Nenhum agendador ativo”</td><td>O processo do agendador parou: <code>docker compose up -d scheduler</code> e veja <code>docker compose logs scheduler</code></td></tr>
+      <tr><td>Tarefa parada em “Na fila”</td><td>Nenhum worker consome aquela fila ou todos estão pausados: veja a tela Sistema (“Filas sem worker”)</td></tr>
+      <tr><td>Processo não sobe e lista problemas</td><td>Alguma variável <code>DELCO_*</code> inválida; corrija conforme a mensagem</td></tr>
+      <tr><td>422 com <code>params.x</code></td><td>Parâmetro fora do tipo, das opções ou dos limites do <code>Param</code></td></tr>
+      <tr><td>Execução falhou com “Tempo limite da execução”</td><td><code>run_timeout</code> do workflow; aumente ou divida o trabalho</td></tr>
+      <tr><td>Tarefa falhou sem retentativas</td><td>Erro fora de <code>retry_on</code> ou <code>Fail</code>; o log diz “Erro marcado como definitivo”</td></tr>
+      <tr><td>Workflow some da lista</td><td>Erro de importação no arquivo: veja o aviso em Workflows ou <code>delco validate</code></td></tr>
+      <tr><td>Notificação não chega</td><td>Histórico de entregas da integração; use <strong>Enviar teste</strong> e <strong>Reenviar</strong></td></tr>
+      <tr><td>E-mail não pode ser criado</td><td>Falta <code>DELCO_SMTP_HOST</code></td></tr>
+      <tr><td>429 no login ou no gatilho</td><td>Limite por minuto; ajuste <code>DELCO_LOGIN_RATE_LIMIT</code> ou <code>DELCO_HOOK_RATE_LIMIT</code></td></tr>
+      <tr><td>401 no gatilho por URL</td><td>Gatilho com assinatura: envie <code>X-Delco-Signature</code></td></tr>
+      <tr><td>Painel sem atualizar sozinho</td><td>O indicador “Ao vivo” mostra a conexão; o proxy precisa repassar WebSocket em <code>/api/ws</code></td></tr>
+    </tbody>
+  </table>
+</section>
+</body>
+</html>

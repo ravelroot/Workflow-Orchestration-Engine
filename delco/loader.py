@@ -1,5 +1,3 @@
-"""Descobre arquivos de workflow numa pasta e importa cada um de forma isolada."""
-
 from __future__ import annotations
 
 import hashlib
@@ -12,11 +10,14 @@ from types import ModuleType
 
 from .sdk import Workflow, WorkflowError
 
+MAX_SOURCE_BYTES = 512 * 1024
+
 
 @dataclass
 class LoadResult:
     workflows: dict[str, Workflow] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
+    sources: dict[str, str] = field(default_factory=dict)
 
 
 def module_name_for(path: Path) -> str:
@@ -25,7 +26,6 @@ def module_name_for(path: Path) -> str:
 
 
 def import_file(path: Path) -> ModuleType:
-    """Importa um arquivo .py pelo caminho, sempre lendo a versão atual do disco."""
     path = path.resolve()
     name = module_name_for(path)
     spec = importlib.util.spec_from_file_location(name, path)
@@ -62,7 +62,12 @@ def workflow_files(folder: Path) -> list[Path]:
 def load_folder(folder: Path) -> LoadResult:
     result = LoadResult()
     for path in workflow_files(folder):
-        rel = str(path.relative_to(folder))
+        rel = path.relative_to(folder).as_posix()
+        try:
+            raw = path.read_bytes()[:MAX_SOURCE_BYTES]
+            result.sources[rel] = raw.decode("utf-8", errors="replace")
+        except OSError:
+            pass
         try:
             module = import_file(path)
             for wf in workflows_in(module):
@@ -75,13 +80,12 @@ def load_folder(folder: Path) -> LoadResult:
                 result.workflows[wf.name] = wf
         except WorkflowError as exc:
             result.errors[rel] = str(exc)
-        except Exception:  # erro de sintaxe ou de importação no arquivo do usuário
+        except Exception:
             result.errors[rel] = traceback.format_exc(limit=4)
     return result
 
 
 def find_task(folder: Path, source_file: str, workflow: str, task: str):
-    """Importa o arquivo do workflow e devolve a função da tarefa (usado no processo filho)."""
     path = (folder / source_file).resolve()
     if not path.is_file():
         raise WorkflowError(f"Arquivo do workflow não encontrado: {source_file}")
@@ -90,5 +94,5 @@ def find_task(folder: Path, source_file: str, workflow: str, task: str):
         if wf.name == workflow:
             if task not in wf.tasks:
                 raise WorkflowError(f"A tarefa {task!r} não existe mais em {workflow} ({source_file}).")
-            return wf.tasks[task].fn
+            return wf.tasks[task]
     raise WorkflowError(f"O workflow {workflow!r} não está mais em {source_file}.")

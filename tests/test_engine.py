@@ -1,5 +1,3 @@
-"""Fluxo completo: agendador + workers reais + MySQL + Redis."""
-
 from __future__ import annotations
 
 import time
@@ -35,7 +33,6 @@ def test_tarefas_independentes_rodam_em_paralelo(db, scheduler, workers):
     assert run_status(db, run_id) == "succeeded"
     assert tasks["juntar"]["output"] == [1, 2, 3, 4]
     partes = [tasks[f"parte_{i}"]["output"] for i in range(1, 5)]
-    # as quatro partes ficaram abertas ao mesmo tempo
     assert max(p["comeco"] for p in partes) < min(p["fim"] for p in partes)
 
 
@@ -89,9 +86,9 @@ def test_retomar_da_falha_mantem_o_que_ja_deu_certo(db, scheduler, workers):
     assert run_status(db, run_id) == "succeeded"
     assert tasks["preparar"]["attempts"] == 1
     assert tasks["preparar"]["finished_at"] == preparar_antes["finished_at"]
-    assert tasks["processar"]["attempts"] == 3  # 2 da primeira vez + 1 agora
+    assert tasks["processar"]["attempts"] == 3
     assert tasks["publicar"]["status"] == "succeeded"
-    assert tasks["alertar"]["status"] == "skipped"  # nada falhou desta vez
+    assert tasks["alertar"]["status"] == "skipped"
 
 
 def test_reexecutar_a_partir_de_uma_tarefa(db, scheduler, workers):

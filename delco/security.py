@@ -1,5 +1,3 @@
-"""Senhas (hasher scrypt do Django) e tokens de acesso (opacos, guardados só como SHA-256)."""
-
 from __future__ import annotations
 
 import hashlib
@@ -46,5 +44,4 @@ def _dummy() -> str:
 
 
 def dummy_verify() -> None:
-    """Gasta o mesmo tempo de uma verificação real (evita descobrir e-mails pelo tempo de resposta)."""
     verify_password("x", _dummy())

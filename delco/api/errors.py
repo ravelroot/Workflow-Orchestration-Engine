@@ -1,5 +1,3 @@
-"""Formato único de erro da API: ``{"code", "message", "fields"}``."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -26,7 +24,6 @@ def error(status: int, code: str, message: str, fields: dict[str, Any] | None = 
 
 
 def _flatten(detail: Any, prefix: str = "") -> dict[str, str]:
-    """Transforma os erros aninhados do DRF em ``{"campo": "mensagem"}``."""
     if isinstance(detail, dict):
         out: dict[str, str] = {}
         for key, value in detail.items():
@@ -55,6 +52,8 @@ def exception_handler(exc: Exception, context: dict) -> Response | None:
         response = error(exc.status, exc.code, exc.message)
     elif isinstance(exc, accounts.ValidationError):
         response = error(422, "validation_error", "Revise os campos destacados.", exc.fields)
+    elif isinstance(exc, store.StoreValidationError):
+        response = error(422, "validation_error", exc.message, exc.fields)
     elif isinstance(exc, store.StoreError):
         response = error(409, "conflict", str(exc))
     elif isinstance(exc, exceptions.ValidationError):

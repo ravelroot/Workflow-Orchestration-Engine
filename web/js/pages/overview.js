@@ -1,19 +1,20 @@
-// Visão geral: indicadores, vazão das últimas 24 h, workers e execuções recentes.
 import { can, get } from "../api.js";
 import { triggerDialog } from "../app.js";
 import { clear, debounce, duration, empty, h, icon, int, pill, progressBar, relative, TRIGGER } from "../ui.js";
 import { throughputChart } from "../viz.js";
 
-export function runsTable(runs, { showWorkflow = true } = {}) {
+export function runsTable(runs, { showWorkflow = true, sel = null } = {}) {
   if (!runs.length) return empty("Nenhuma execução ainda", "Dispare um workflow pelo botão Executar ou aguarde o próximo horário agendado.");
   return h("div", { class: "table-wrap" }, h("table", { class: "table" },
     h("thead", {}, h("tr", {},
+      sel ? h("th", { class: "check-cell" }, sel.headBox(runs.map((r) => r.id), "Selecionar as execuções da página")) : null,
       h("th", {}, "#"), showWorkflow ? h("th", {}, "Workflow") : null, h("th", {}, "Estado"), h("th", {}, "Progresso"),
       h("th", {}, "Origem"), h("th", {}, "Início"), h("th", { class: "right" }, "Duração"))),
-    h("tbody", {}, runs.map((r) => h("tr", { class: "link", onclick: () => (location.hash = `#/runs/${r.id}`) },
+    h("tbody", {}, runs.map((r) => h("tr", { class: `link${sel?.has(r.id) ? " selected" : ""}`, onclick: () => (location.hash = `#/runs/${r.id}`) },
+      sel ? h("td", { class: "check-cell" }, sel.box(r.id, `Selecionar a execução ${r.id}`)) : null,
       h("td", { class: "num muted" }, r.id),
-      showWorkflow ? h("td", { class: "strong" }, r.workflow) : null,
-      h("td", {}, pill(r.status)),
+      showWorkflow ? h("td", {}, h("div", { class: "strong" }, r.workflow), r.note ? h("div", { class: "tiny muted ellipsis", style: { maxWidth: "260px" }, title: r.note }, r.note) : null) : null,
+      h("td", { title: r.error || "" }, pill(r.status)),
       h("td", {}, h("div", { class: "progress-line" },
         progressBar([
           { cls: "ok", value: r.tasks_succeeded },
@@ -45,7 +46,7 @@ export function overviewPage(main, ctx) {
       return;
     }
     const k = data.kpis;
-    const online = workers.filter((w) => w.status === "online");
+    const online = workers.filter((w) => w.status === "online" || w.status === "paused");
     const stat = (value, label, cls = "", extra = null) => h("div", { class: `console-stat ${cls}` }, h("strong", {}, value, extra), h("span", {}, label));
     const done24 = k.runs_succeeded_24h + k.runs_failed_24h;
     const rate = done24 ? (100 * k.runs_succeeded_24h) / done24 : null;
@@ -60,11 +61,11 @@ export function overviewPage(main, ctx) {
           stat(int(k.running_tasks), "vagas ocupadas", k.running_tasks ? "lit" : "", h("small", {}, `/ ${int(k.slots_total)}`)),
           stat(int(k.queued_tasks), "tarefas na fila"),
           stat(int(k.retry_tasks), "esperando nova tentativa", k.retry_tasks ? "alarm" : "")),
-        h("div", { class: "lamp-board" }, online.length ? online.map((w) => h("div", { class: "lamp-row" },
-          h("span", { class: "who", title: `${w.id} · filas ${w.queues.join(", ")}` }, h("span", { class: "dot" }), w.id),
+        h("div", { class: "lamp-board" }, online.length ? online.map((w) => h("div", { class: `lamp-row${w.status === "paused" ? " paused" : ""}` },
+          h("span", { class: "who", title: `${w.id} · filas ${w.queues.join(", ")}${w.status === "paused" ? " · pausado" : ""}` }, h("span", { class: "dot" }), w.id),
           h("div", { class: "lamps" },
             w.running.map((r) => h("a", { class: "lamp on", href: `#/runs/${r.run_id}?task=${encodeURIComponent(r.task_name)}`, title: `${r.workflow} #${r.run_id} · ${r.task_name}` }, h("span", {}, r.task_name))),
-            Array.from({ length: Math.max(0, w.concurrency - w.running.length) }, () => h("span", { class: "lamp free" }, h("span", {}, "livre")))),
+            Array.from({ length: Math.max(0, w.concurrency - w.running.length) }, () => h("span", { class: "lamp free" }, h("span", {}, w.status === "paused" ? "pausada" : "livre")))),
           h("span", { class: "busy" }, `${w.running.length}/${w.concurrency}`))) : h("p", { class: "empty-line" }, "As vagas aparecem aqui assim que um worker se conectar."))),
       h("div", { class: "kpis" },
         kpi("Concluídas em 24 h", int(k.runs_succeeded_24h), rate === null ? "nenhuma execução terminou" : `${Math.round(rate)}% de sucesso`, "good"),
@@ -93,7 +94,6 @@ export function overviewPage(main, ctx) {
 
 function upcomingList(items) {
   if (!items.length) return h("p", { class: "muted small", style: { padding: "4px 20px 20px" } }, "Nenhuma execução agendada nas próximas 24 horas. Workflows pausados ou sem agenda não aparecem aqui.");
-  // agrupa horários repetidos do mesmo workflow para a lista não virar um relógio de 15 em 15 minutos
   const seen = new Map();
   const rows = [];
   for (const it of items) {

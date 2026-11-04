@@ -1,0 +1,16 @@
+digraph worker {
+rankdir=LR;
+graph [fontname="Helvetica", bgcolor="transparent", pad="0.2", nodesep="0.35", ranksep="0.5"];
+node [fontname="Helvetica", fontsize=10, color="#d6cbc5", fontcolor="#1f292f"];
+edge [fontname="Helvetica", fontsize=8, color="#8a9eab", fontcolor="#65695b", arrowsize=0.7];
+online [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#9ca38e", penwidth=2, label=<<font face="Courier" point-size="9">online</font>>];
+paused [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#c09550", penwidth=2, label=<<font face="Courier" point-size="9">paused</font>>];
+stopping [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#c09550", penwidth=2, label=<<font face="Courier" point-size="9">stopping</font>>];
+offline [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#65695b", penwidth=2, label=<<font face="Courier" point-size="9">offline</font>>];
+online -> paused [label="pausar"];
+paused -> online [label="retomar"];
+online -> stopping [label="SIGTERM"];
+paused -> stopping [label="SIGTERM"];
+stopping -> offline [label="vagas livres"];
+online -> offline [label="sem sinal"];
+}

@@ -1,5 +1,3 @@
-# Imagem única do Delco (Django): o mesmo contêiner vira API, agendador ou worker conforme o comando.
-# O mysqlclient (driver do MySQL recomendado pelo Django) é compilado num estágio à parte.
 FROM python:3.13-slim AS build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential pkg-config default-libmysqlclient-dev \

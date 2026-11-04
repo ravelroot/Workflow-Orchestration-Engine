@@ -1,5 +1,3 @@
-"""Consultas de leitura usadas pela API e pelo painel (ORM do Django)."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -32,14 +30,12 @@ FAILED_ATTEMPT = ("failed", "timed_out", "lost")
 def duration_ms(
     started: datetime | None, finished: datetime | None, now: datetime | None = None
 ) -> int | None:
-    """Duração em milissegundos; enquanto não termina, conta até agora."""
     if started is None:
         return None
     end = finished or now or timezone.now()
     return int((end - started).total_seconds() * 1000)
 
 
-# ------------------------------------------------------------------ workflows
 def list_workflows() -> list[dict[str, Any]]:
     week = timezone.now() - timedelta(days=7)
     stats = {
@@ -79,6 +75,8 @@ def list_workflows() -> list[dict[str, Any]]:
                 "source_file": w.source_file,
                 "version": version.version if version else None,
                 "task_count": len(version.graph["tasks"]) if version else None,
+                "params_count": len(w.params_schema or {}),
+                "run_timeout": (version.graph or {}).get("run_timeout") if version else None,
                 "active_runs": s.get("active", 0),
                 "recent": recent.get(w.id, []),
                 "success_rate": round(100 * s["ok"] / s["done"]) if s.get("done") else None,
@@ -114,6 +112,9 @@ def get_workflow(name: str) -> dict[str, Any] | None:
         "tags": w.tags,
         "max_active_runs": w.max_active_runs,
         "default_params": w.default_params,
+        "params_schema": w.params_schema or {},
+        "run_timeout": (v.graph or {}).get("run_timeout") if v else None,
+        "has_source": bool(w.source_code),
         "source_file": w.source_file,
         "created_at": w.created_at,
         "updated_at": w.updated_at,
@@ -158,7 +159,6 @@ def workflow_grid(name: str, limit: int) -> dict[str, Any] | None:
     return {"tasks": [t["name"] for t in w.current_version.graph["tasks"]], "runs": out}
 
 
-# --------------------------------------------------------------------- runs
 def _runs():
     return WorkflowRun.objects.select_related("workflow", "version", "triggered_by").annotate(
         tasks_total=Count("tasks"),
@@ -174,6 +174,7 @@ def _run_row(r: WorkflowRun, now: datetime) -> dict[str, Any]:
         "id": r.id,
         "workflow": r.workflow.name,
         "status": r.status,
+        "error": r.error,
         "trigger": r.trigger,
         "triggered_by": r.triggered_by.name if r.triggered_by else None,
         "logical_date": r.logical_date,
@@ -228,16 +229,18 @@ EXPORT_COLUMNS = [
 ]
 
 
+def _iso(value: datetime | None) -> str:
+    return value.isoformat() if value else ""
+
+
 def export_runs(*, limit: int = 10000, **filters: Any) -> list[list[Any]]:
-    """Linhas do CSV de execuções (mesmos filtros da listagem), da mais recente para a mais antiga."""
     now = timezone.now()
     rows = []
     for r in _runs().filter(_run_filters(**filters)).order_by("-id")[:limit]:
         d = _run_row(r, now)
-        iso = lambda v: v.isoformat() if v else ""  # noqa: E731
         rows.append([
-            d["id"], d["workflow"], d["status"], d["trigger"], d["triggered_by"] or "", iso(d["created_at"]),
-            iso(d["started_at"]), iso(d["finished_at"]), d["duration_ms"] if d["duration_ms"] is not None else "",
+            d["id"], d["workflow"], d["status"], d["trigger"], d["triggered_by"] or "", _iso(d["created_at"]),
+            _iso(d["started_at"]), _iso(d["finished_at"]), d["duration_ms"] if d["duration_ms"] is not None else "",
             d["tasks_total"], d["tasks_succeeded"], d["tasks_failed"], d["note"] or "",
         ])
     return rows
@@ -248,7 +251,15 @@ def get_run(run_id: int) -> dict[str, Any] | None:
     if r is None:
         return None
     now = timezone.now()
-    run = {**_run_row(r, now), "params": r.params, "graph": r.version.graph}
+    schema = r.workflow.params_schema or {}
+    params = {k: ("••••" if schema.get(k, {}).get("secret") else v) for k, v in (r.params or {}).items()}
+    run = {
+        **_run_row(r, now),
+        "params": params,
+        "graph": r.version.graph,
+        "run_timeout": (r.version.graph or {}).get("run_timeout"),
+        "baseline_ms": _baseline(r.workflow_id, r.id),
+    }
     tasks = (
         TaskInstance.objects.filter(run_id=run_id)
         .order_by("id")
@@ -277,13 +288,23 @@ def get_run(run_id: int) -> dict[str, Any] | None:
 
 
 def get_task(run_id: int, name: str) -> dict[str, Any] | None:
-    t = TaskInstance.objects.select_related("run__workflow").filter(run_id=run_id, task_name=name).first()
+    t = (
+        TaskInstance.objects.select_related("run__workflow", "run__version")
+        .filter(run_id=run_id, task_name=name)
+        .first()
+    )
     if t is None:
         return None
+    spec = next(
+        (x for x in (t.run.version.graph or {}).get("tasks", []) if x["name"] == t.task_name),
+        {},
+    )
     task = {
         "id": t.id,
         "run_id": t.run_id,
         "name": t.task_name,
+        "description": spec.get("description") or "",
+        "retry_on": spec.get("retry_on"),
         "status": t.status,
         "attempts": t.attempts,
         "max_attempts": t.max_attempts,
@@ -337,7 +358,6 @@ def attempt_logs(attempt_id: int, after: int, limit: int) -> dict[str, Any] | No
     return {"lines": rows[:limit], "has_more": len(rows) > limit}
 
 
-# --------------------------------------------------------------- monitoramento
 def overview() -> dict[str, Any]:
     now = timezone.now()
     day = now - timedelta(hours=24)
@@ -374,7 +394,6 @@ def overview() -> dict[str, Any]:
         "failed_attempts_24h": attempts["failed_attempts_24h"],
         "avg_task_ms_24h": round(avg) if avg is not None else None,
     }
-    # vazão por hora nas últimas 24 h (horas sem tentativa aparecem com zero)
     first = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)
     per_hour = {
         r["hour"]: r
@@ -465,25 +484,101 @@ def queue_counts() -> list[dict[str, Any]]:
     )
 
 
-def audit_page(page: int, size: int) -> dict[str, Any]:
-    total = AuditLog.objects.count()
+def _audit_filters(action: str | None, user: int | None, q: str | None, since: int | None) -> Q:
+    filters = Q()
+    if action:
+        filters &= Q(action=action) if "." in action else Q(action__startswith=f"{action}.")
+    if user:
+        filters &= Q(user_id=user)
+    if q:
+        filters &= Q(target__icontains=q.strip()) | Q(user__name__icontains=q.strip())
+    if since:
+        filters &= Q(created_at__gte=timezone.now() - timedelta(days=since))
+    return filters
+
+
+def _audit_row(a: AuditLog) -> dict[str, Any]:
+    return {
+        "id": a.id,
+        "action": a.action,
+        "target": a.target,
+        "details": a.details,
+        "created_at": a.created_at,
+        "user_id": a.user_id,
+        "user_name": a.user.name if a.user else None,
+        "user_email": a.user.email if a.user else None,
+    }
+
+
+def audit_page(
+    page: int,
+    size: int,
+    *,
+    action: str | None = None,
+    user: int | None = None,
+    q: str | None = None,
+    since: int | None = None,
+) -> dict[str, Any]:
+    filters = _audit_filters(action, user, q, since)
+    total = AuditLog.objects.filter(filters).count()
     offset = (page - 1) * size
-    items = [
-        {
-            "id": a.id,
-            "action": a.action,
-            "target": a.target,
-            "details": a.details,
-            "created_at": a.created_at,
-            "user_name": a.user.name if a.user else None,
-            "user_email": a.user.email if a.user else None,
-        }
-        for a in AuditLog.objects.select_related("user").order_by("-id")[offset : offset + size]
-    ]
-    return {"items": items, "total": total, "page": page, "size": size}
+    rows = AuditLog.objects.select_related("user").filter(filters).order_by("-id")[offset : offset + size]
+    actions = sorted(AuditLog.objects.values_list("action", flat=True).distinct())
+    return {"items": [_audit_row(a) for a in rows], "total": total, "page": page, "size": size, "actions": actions}
 
 
-# ----------------------------------------------------------------- desempenho
+AUDIT_COLUMNS = ["id", "quando", "usuario", "email", "acao", "alvo", "detalhes"]
+
+
+def export_audit(*, limit: int = 20000, **filters: Any) -> list[list[Any]]:
+    import json
+
+    rows = []
+    qs = AuditLog.objects.select_related("user").filter(_audit_filters(**filters)).order_by("-id")[:limit]
+    for a in qs:
+        rows.append(
+            [
+                a.id,
+                a.created_at.isoformat(),
+                a.user.name if a.user else "sistema",
+                a.user.email if a.user else "",
+                a.action,
+                a.target or "",
+                json.dumps(a.details, ensure_ascii=False, default=str),
+            ]
+        )
+    return rows
+
+
+def _baseline(workflow_id: int, before_id: int) -> int | None:
+    rows = list(
+        WorkflowRun.objects.filter(
+            workflow_id=workflow_id, status="succeeded", id__lt=before_id, started_at__isnull=False
+        )
+        .order_by("-id")
+        .values_list("started_at", "finished_at")[:30]
+    )
+    durations = [int((f - s).total_seconds() * 1000) for s, f in rows if s and f]
+    return _pct(durations, 50) if len(durations) >= 3 else None
+
+
+def workflow_source(name: str) -> dict[str, Any] | None:
+    w = Workflow.objects.select_related("current_version").filter(name=name).first()
+    if w is None:
+        return None
+    tasks = {}
+    if w.current_version:
+        tasks = {t["name"]: t.get("line") for t in w.current_version.graph["tasks"]}
+    return {
+        "workflow": w.name,
+        "file": w.source_file,
+        "code": w.source_code,
+        "hash": w.source_hash,
+        "updated_at": w.updated_at,
+        "tasks": tasks,
+    }
+
+
 def _pct(values: list[int], p: float) -> int | None:
     if not values:
         return None
@@ -493,7 +588,6 @@ def _pct(values: list[int], p: float) -> int | None:
 
 
 def insights(days: int) -> dict[str, Any]:
-    """Saúde de cada workflow no período: volume, taxa de sucesso, p50/p95 e tarefas problemáticas."""
     now = timezone.now()
     since = now - timedelta(days=days)
     first_day = timezone.localtime(now).date() - timedelta(days=days - 1)
@@ -580,9 +674,7 @@ def insights(days: int) -> dict[str, Any]:
     }
 
 
-# --------------------------------------------------------- próximas execuções
 def upcoming(hours: int, limit: int = 60) -> list[dict[str, Any]]:
-    """Horários agendados nas próximas ``hours`` horas, de todos os workflows ativos."""
     from ..schedule import next_fire
 
     now = timezone.now()

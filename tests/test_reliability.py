@@ -1,5 +1,3 @@
-"""Confiabilidade: queda de worker, mensagens repetidas ou perdidas, vários agendadores."""
-
 from __future__ import annotations
 
 import threading
@@ -25,7 +23,7 @@ def test_queda_no_meio_de_50_passos_retoma_exatamente_de_onde_parou(db, schedule
     params = {"marcador": str(marcador), "pausa": 0.01, "lento": 23, "pausa_lenta": 5}
     run_id = store.trigger_run("cinquenta", params=params)
     wait_for(scheduler, lambda: tasks_of(db, run_id)["passo_23"]["status"] == "running", timeout=40)
-    primeiro.kill()  # queda no passo 23: nada mais é gravado por este worker
+    primeiro.kill()
     interrompido = "passo_23"
     assert tasks_of(db, run_id)["passo_22"]["status"] == "succeeded"
 
@@ -37,7 +35,7 @@ def test_queda_no_meio_de_50_passos_retoma_exatamente_de_onde_parou(db, schedule
     executados = [int(x) for x in _lines(marcador)]
     numero = int(interrompido.split("_")[1])
     for n in range(1, 51):
-        esperado = 2 if n == numero else 1  # só o passo interrompido roda de novo
+        esperado = 2 if n == numero else 1
         assert executados.count(n) == esperado, (n, executados.count(n))
     tentativas = db.fetchall(
         "SELECT status, worker_id FROM task_attempts WHERE task_instance_id = %s ORDER BY number",
@@ -54,7 +52,7 @@ def test_mensagem_repetida_nao_executa_duas_vezes(db, scheduler, bus, workers, t
     task = tasks_of(db, run_id)["marcar"]
     assert task["status"] == "queued" and task["queue_message_id"]
     for _ in range(3):
-        bus.enqueue("default", task["id"])  # mesma tarefa publicada mais 3 vezes
+        bus.enqueue("default", task["id"])
     workers(concurrency=4)
     wait_for(scheduler, finished(db, run_id))
     time.sleep(0.5)
@@ -67,7 +65,7 @@ def test_mensagem_perdida_e_republicada(db, scheduler, bus, workers, tmp_path):
     run_id = store.trigger_run("marcador", params={"marcador": str(tmp_path / "m.txt")})
     scheduler.tick()
     task = tasks_of(db, run_id)["marcar"]
-    bus.redis.xdel(stream_key("default"), task["queue_message_id"])  # some do Redis
+    bus.redis.xdel(stream_key("default"), task["queue_message_id"])
     db.execute(
         "UPDATE task_instances SET queued_at = NOW(6) - INTERVAL 1 MINUTE WHERE id = %s", (task["id"],)
     )
@@ -100,7 +98,6 @@ def test_lease_vencido_vira_nova_tentativa_ou_falha(db, scheduler):
     )
     recovered = store.recover_expired_leases()
     assert [r["status"] for r in recovered] == ["retry_wait"]
-    # o worker antigo "acorda" e tenta gravar o resultado: é recusado
     assert store.finish(claim, "succeeded", output=1) is None
     assert store.task_heartbeat(task["id"], claim.attempt, 30) == (False, False)
     attempt = db.fetchone("SELECT status FROM task_attempts WHERE id = %s", (claim.attempt_id,))
@@ -173,7 +170,7 @@ def test_desligamento_sem_tempo_devolve_a_tarefa_para_a_fila(db, scheduler, work
     wait_for(scheduler, lambda: tasks_of(db, run_id)["espera"]["status"] == "running")
     w.stop(grace=0.2)
     task = tasks_of(db, run_id)["espera"]
-    assert task["status"] == "failed"  # retries=0: a tentativa interrompida esgota o limite
+    assert task["status"] == "failed"
     attempt = db.fetchone("SELECT status FROM task_attempts WHERE task_instance_id = %s", (task["id"],))
     assert attempt["status"] == "lost"
 

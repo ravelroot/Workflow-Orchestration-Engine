@@ -1,0 +1,26 @@
+digraph tarefa {
+rankdir=LR;
+graph [fontname="Helvetica", bgcolor="transparent", pad="0.2", nodesep="0.35", ranksep="0.5"];
+node [fontname="Helvetica", fontsize=10, color="#d6cbc5", fontcolor="#1f292f"];
+edge [fontname="Helvetica", fontsize=8, color="#8a9eab", fontcolor="#65695b", arrowsize=0.7];
+pending [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#d9c3b6", penwidth=2, label=<<font face="Courier" point-size="9">pending</font>>];
+queued [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#8a9eab", penwidth=2, label=<<font face="Courier" point-size="9">queued</font>>];
+running [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#4c6170", penwidth=2, label=<<font face="Courier" point-size="9">running</font>>];
+retry_wait [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#c09550", penwidth=2, label=<<font face="Courier" point-size="9">retry_wait</font>>];
+succeeded [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#9ca38e", penwidth=2, label=<<font face="Courier" point-size="9">succeeded</font>>];
+failed [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#a04e3c", penwidth=2, label=<<font face="Courier" point-size="9">failed</font>>];
+skipped [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#ebe0dd", penwidth=2, label=<<font face="Courier" point-size="9">skipped</font>>];
+cancelled [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#65695b", penwidth=2, label=<<font face="Courier" point-size="9">cancelled</font>>];
+pending -> queued [label="dependências ok"];
+pending -> skipped [label="dependência\nsem sucesso"];
+queued -> running [label="worker assume"];
+running -> succeeded [label="resultado"];
+running -> skipped [label="ctx.skip()"];
+running -> retry_wait [label="erro com\nretentativa"];
+retry_wait -> queued [label="espera acabou"];
+running -> failed [label="erro definitivo\nou sem tentativas"];
+running -> cancelled [label="pedido de parada"];
+queued -> cancelled [label="cancelar"];
+failed -> succeeded [label="marcar"];
+failed -> pending [label="retomar"];
+}

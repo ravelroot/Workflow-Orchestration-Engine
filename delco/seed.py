@@ -1,9 +1,3 @@
-"""Dados de demonstração: contas de teste e uma semana de histórico fictício.
-
-Tudo aqui é inventado e existe só para o painel não abrir vazio. Desligue com
-``DELCO_SEED=false`` antes do primeiro start em produção.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -15,6 +9,7 @@ from croniter import croniter
 from django.db import transaction
 from django.db.models import Max
 
+from . import __version__
 from .models import TaskAttempt, TaskInstance, TaskLog, User, Worker, Workflow, WorkflowRun
 from .schedule import normalize_cron, utcnow
 from .security import hash_password
@@ -59,7 +54,6 @@ def _fires(expr: str, start: datetime, end: datetime, limit: int) -> list[dateti
 
 
 def _plan(graph: dict[str, Any], rng: random.Random, scenario: str) -> dict[str, dict[str, Any]]:
-    """Decide status, tentativas e erro de cada tarefa de uma execução fictícia."""
     tasks = graph["tasks"]
     plan: dict[str, dict[str, Any]] = {t["name"]: {"status": "pending", "attempts": []} for t in tasks}
     victim = None
@@ -106,8 +100,8 @@ def _insert_run(
     trigger: str,
     logical: datetime | None,
     user_id: int | None,
+    note: str | None = None,
 ) -> None:
-    """Monta uma execução fictícia completa (tarefas, tentativas e logs) para gravar em lote."""
     graph = wf.current_version.graph
     plan = _plan(graph, rng, scenario)
     run_start = start + timedelta(milliseconds=rng.randint(40, 400))
@@ -141,6 +135,7 @@ def _insert_run(
         triggered_by_id=user_id,
         logical_date=logical,
         params=wf.default_params,
+        note=note,
         created_at=start,
         started_at=run_start,
         finished_at=run_end,
@@ -207,7 +202,6 @@ def _insert_run(
 
 
 def _with_ids(model, objs: list) -> list:
-    """Numera os objetos a partir do maior id da tabela (o seed roda uma vez, em banco sem execuções)."""
     start = (model.objects.aggregate(n=Max("id"))["n"] or 0) + 1
     for i, obj in enumerate(objs):
         obj.id = start + i
@@ -215,10 +209,7 @@ def _with_ids(model, objs: list) -> list:
 
 
 class _Batch(list):
-    """Execuções montadas em memória e gravadas com ``bulk_create`` (rápido mesmo com milhares de linhas)."""
-
     def save(self) -> None:
-        # O MySQL não devolve os ids de um INSERT em lote: os ids saem daqui, a partir do maior já gravado.
         runs = _with_ids(WorkflowRun, [run for run, _ in self])
         WorkflowRun.objects.bulk_create(runs)
         instances = []
@@ -244,7 +235,6 @@ class _Batch(list):
 
 
 def seed_history(*, now: datetime | None = None, seed: int = 2026) -> int:
-    """Cria uma semana de execuções fictícias se o banco ainda não tiver nenhuma."""
     if WorkflowRun.objects.exists():
         return 0
     now = now or utcnow()
@@ -267,7 +257,7 @@ def seed_history(*, now: datetime | None = None, seed: int = 2026) -> int:
                     pid=1,
                     queues=["default", "critical"],
                     concurrency=4,
-                    version="1.1.0",
+                    version=__version__,
                     status="offline",
                     started_at=now - timedelta(days=8),
                     last_heartbeat_at=now - timedelta(hours=26),
@@ -299,6 +289,15 @@ def seed_history(*, now: datetime | None = None, seed: int = 2026) -> int:
                         None,
                         rng.choice(users) if users else None,
                     )
+        report = next((w for w in workflows if w.name == "relatorio_vendas_diario" and w.schedule), None)
+        if report:
+            created = now - timedelta(days=2, hours=3)
+            first = (now - timedelta(days=10)).date()
+            last = (now - timedelta(days=8)).date()
+            label = f"Reprocessamento de {first.strftime('%d/%m/%Y')} a {last.strftime('%d/%m/%Y')}"
+            for fire in _fires(report.schedule, now - timedelta(days=10, hours=12), now - timedelta(days=7, hours=12), 3):
+                _insert_run(batch, report, created, rng, "ok", "backfill", fire, users[0] if users else None, label)
+                created += timedelta(minutes=2)
         batch.save()
         seed_integrations(now, rng)
     log.info("Histórico de demonstração criado: %s execuções", len(batch))
@@ -306,7 +305,6 @@ def seed_history(*, now: datetime | None = None, seed: int = 2026) -> int:
 
 
 DEMO_INTEGRATIONS = [
-    # (nome, tipo, url, eventos, workflows)
     ("Alertas do time de dados", "slack", "https://hooks.slack.com/services/T0DEMO000/B0DEMO000/exemplo",
      ["run.failed", "run.cancelled"], []),
     ("Canal #operacao no Discord", "discord", "https://discord.com/api/webhooks/000000000000/exemplo",
@@ -315,11 +313,12 @@ DEMO_INTEGRATIONS = [
      ["run.succeeded", "run.failed"], ["relatorio_vendas_diario"]),
     ("ERP interno", "webhook", "https://erp.exemplo.com.br/delco/eventos",
      ["run.started", "run.succeeded", "run.failed", "run.cancelled"], ["sincronizar_catalogo"]),
+    ("Plantão no Telegram", "telegram", None, ["run.failed", "run.recovered"], ["backup_noturno"]),
+    ("E-mail do time de dados", "email", None, ["run.failed", "run.recovered"], ["relatorio_vendas_diario"]),
 ]
 
 
 def seed_integrations(now: datetime, rng: random.Random) -> int:
-    """Integrações de demonstração com um histórico de entregas fictício (os endereços não existem)."""
     import secrets as _secrets
 
     from . import integrations as integ_mod
@@ -330,9 +329,11 @@ def seed_integrations(now: datetime, rng: random.Random) -> int:
     admin = User.objects.filter(role="admin").order_by("id").values_list("id", flat=True).first()
     created = []
     for name, kind, url, events, wfs in DEMO_INTEGRATIONS:
+        secret = _secrets.token_hex(24) if kind == "webhook" else "000000000:DEMO-token-ficticio-do-bot" if kind == "telegram" else None
+        config = {"chat_id": "-1000000000000"} if kind == "telegram" else {"to": ["dados@delco.dev"]} if kind == "email" else {}
         created.append(Integration.objects.create(
             name=name, kind=kind, url=url, events=events, workflows=wfs, created_by_id=admin,
-            secret=_secrets.token_hex(24) if kind == "webhook" else None,
+            secret=secret, config=config, is_active=kind != "email",
             created_at=now - timedelta(days=7, hours=2),
         ))
     target = Workflow.objects.filter(name="relatorio_vendas_diario").first()

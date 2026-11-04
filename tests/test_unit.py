@@ -1,5 +1,3 @@
-"""Testes de unidade: não precisam de MySQL nem Redis."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -95,7 +93,7 @@ def test_workflow_sem_tarefas_e_parametros_invalidos():
 
 
 def test_cron_proximo_horario_respeita_fuso():
-    after = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)  # 09:00 em Brasília
+    after = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)
     nxt = next_fire("0 7 * * *", "America/Sao_Paulo", after)
     assert nxt.astimezone(UTC) == datetime(2026, 10, 21, 10, 0, tzinfo=UTC)
     assert validate_cron("@hourly") == "0 * * * *"

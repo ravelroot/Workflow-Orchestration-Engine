@@ -1,19 +1,10 @@
-"""Transições de estado com o ORM do Django.
-
-Regra de ouro: toda mudança de estado é condicional. Ou a linha é travada com
-``select_for_update()`` (com ``skip_locked`` quando outro processo pode estar
-cuidando dela) e conferida antes de mudar, ou o ``UPDATE`` leva o estado
-esperado no filtro e devolve quantas linhas mudaram (compare-and-set). Se dois
-processos tentarem a mesma transição, só um vence; o outro vê 0 linhas e segue
-em frente. É isso que torna mensagens repetidas, quedas de worker e vários
-agendadores ao mesmo tempo inofensivos.
-"""
-
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from datetime import time as dtime
 from typing import Any
 
 from django.db import IntegrityError, transaction
@@ -44,8 +35,9 @@ from .models import (
     WorkflowRun,
     WorkflowVersion,
 )
+from .params import resolve
 from .schedule import next_fire, retry_delay, utcnow
-from .sdk import descendants
+from .sdk import descendants, diff_graphs
 
 log = logging.getLogger("delco.store")
 
@@ -56,11 +48,17 @@ SKIPPED_ERROR = "Pulada: dependência não terminou com sucesso."
 
 
 class StoreError(Exception):
-    """Operação impossível no estado atual (vira 409 na API)."""
+    pass
+
+
+class StoreValidationError(Exception):
+    def __init__(self, fields: dict[str, str], message: str = "Revise os campos destacados.") -> None:
+        super().__init__(message)
+        self.fields = fields
+        self.message = message
 
 
 def db_now_plus(seconds: float) -> ExpressionWrapper:
-    """``now() + intervalo`` calculado no relógio do MySQL."""
     return ExpressionWrapper(
         Now() + Value(timedelta(seconds=seconds), output_field=DurationField()), output_field=DateTimeField()
     )
@@ -70,13 +68,13 @@ def db_ago(seconds: float) -> ExpressionWrapper:
     return db_now_plus(-seconds)
 
 
-# ===================================================================== definições
 def sync_definitions(result: LoadResult, now: datetime | None = None) -> dict[str, Any]:
-    """Grava cada workflow carregado e cria uma nova versão quando o grafo muda."""
     now = now or utcnow()
     new_versions: list[str] = []
     for wf in result.workflows.values():
         d = wf.definition()
+        source = result.sources.get(wf.source_file or "")
+        source_hash = hashlib.sha256(source.encode()).hexdigest() if source is not None else None
         with transaction.atomic():
             row = Workflow.objects.select_for_update().filter(name=wf.name).first()
             previous_schedule = row.schedule if row else None
@@ -88,7 +86,11 @@ def sync_definitions(result: LoadResult, now: datetime | None = None) -> dict[st
             if version is None:
                 last = WorkflowVersion.objects.filter(workflow=row).aggregate(n=Max("version"))["n"] or 0
                 version = WorkflowVersion.objects.create(
-                    workflow=row, version=last + 1, fingerprint=d["fingerprint"], graph=d["graph"]
+                    workflow=row,
+                    version=last + 1,
+                    fingerprint=d["fingerprint"],
+                    graph=d["graph"],
+                    source_code=source,
                 )
                 new_versions.append(f"{wf.name} v{version.version}")
             next_run = row.next_run_at
@@ -102,8 +104,10 @@ def sync_definitions(result: LoadResult, now: datetime | None = None) -> dict[st
                 timezone=d["timezone"],
                 max_active_runs=d["max_active_runs"],
                 default_params=d["params"],
+                params_schema=d["params_schema"],
                 tags=d["tags"],
                 source_file=d["source_file"],
+                **({"source_code": source, "source_hash": source_hash} if source is not None else {}),
                 current_version=version,
                 next_run_at=next_run,
                 is_active=True,
@@ -112,7 +116,7 @@ def sync_definitions(result: LoadResult, now: datetime | None = None) -> dict[st
     loaded = list(result.workflows)
     broken_files = list(result.errors)
     stale = Workflow.objects.filter(is_active=True).exclude(name__in=loaded)
-    if broken_files:  # arquivo com erro: mantém os workflows dele até ser corrigido
+    if broken_files:
         stale = stale.exclude(source_file__in=broken_files)
     deactivated = sorted(stale.values_list("name", flat=True))
     if deactivated:
@@ -127,7 +131,6 @@ def sync_definitions(result: LoadResult, now: datetime | None = None) -> dict[st
     }
 
 
-# ====================================================================== execuções
 def create_run(
     workflow: Workflow,
     *,
@@ -137,14 +140,9 @@ def create_run(
     logical_date: datetime | None = None,
     note: str | None = None,
 ) -> int | None:
-    """Cria a execução e materializa todas as tarefas como ``pending``.
-
-    ``workflow`` precisa vir com ``current_version`` carregada. Devolve ``None``
-    se já existir execução agendada para a mesma data lógica.
-    """
     merged = {**(workflow.default_params or {}), **(params or {})}
     try:
-        with transaction.atomic():  # savepoint: a chave única por data lógica pode recusar
+        with transaction.atomic():
             run = WorkflowRun.objects.create(
                 workflow_id=workflow.id,
                 version_id=workflow.current_version_id,
@@ -197,14 +195,30 @@ def trigger_run(
             raise LookupError(name)
         if not wf.is_active:
             raise StoreError(f"O workflow {name} não está mais na pasta de workflows.")
-        run_id = create_run(wf, trigger=trigger, params=params, triggered_by=user_id, note=note)
-        audit(user_id, "run.trigger", f"run:{run_id}", {"workflow": name, "params": params or {}})
+        merged = validate_params(wf, params)
+        run_id = create_run(wf, trigger=trigger, params=merged, triggered_by=user_id, note=note)
+        audit(
+            user_id,
+            "run.trigger",
+            f"run:{run_id}",
+            {"workflow": name, "params": mask_params(wf.params_schema, params or {}), "source": trigger},
+        )
     assert run_id is not None
     return run_id
 
 
+def validate_params(wf: Workflow, params: dict[str, Any] | None) -> dict[str, Any]:
+    merged, errors = resolve(wf.params_schema or {}, wf.default_params or {}, params)
+    if errors:
+        raise StoreValidationError(errors, "Confira os parâmetros destacados.")
+    return merged
+
+
+def mask_params(schema: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    return {k: ("••••" if (schema or {}).get(k, {}).get("secret") else v) for k, v in (params or {}).items()}
+
+
 def schedule_due(now: datetime | None = None) -> list[int]:
-    """Cria as execuções agendadas cujo horário chegou (sem recuperar horários perdidos)."""
     now = now or utcnow()
     created: list[int] = []
     with transaction.atomic():
@@ -231,7 +245,6 @@ def schedule_due(now: datetime | None = None) -> list[int]:
 
 
 def promote_runs() -> list[int]:
-    """Coloca execuções da fila para rodar, respeitando ``max_active_runs`` de cada workflow."""
     started: list[int] = []
     with transaction.atomic():
         workflows = list(
@@ -260,7 +273,6 @@ def promote_runs() -> list[int]:
 
 
 def decide(rule: str, upstream: list[str]) -> str:
-    """Decide se uma tarefa pendente roda, espera ou é pulada: 'run' | 'wait' | 'skip'."""
     if any(s not in TERMINAL_TASK for s in upstream):
         return "wait"
     if rule == "all_done":
@@ -280,16 +292,12 @@ def run_outcome(statuses: list[str]) -> str:
 
 @dataclass
 class DispatchResult:
-    ready: list[tuple[int, str, int, str]]  # (task_id, queue, run_id, task_name)
+    ready: list[tuple[int, str, int, str]]
     skipped: list[tuple[int, int, str]]
     finished: list[tuple[int, str]]
 
 
 def dispatch(now: datetime | None = None) -> DispatchResult:
-    """Avalia as dependências e marca como ``queued`` as tarefas prontas.
-
-    A publicação no Redis acontece depois do COMMIT (veja ``Scheduler.enqueue``).
-    """
     now = now or utcnow()
     result = DispatchResult([], [], [])
     has_ready = TaskInstance.objects.filter(run=OuterRef("pk")).filter(
@@ -311,7 +319,7 @@ def dispatch(now: datetime | None = None) -> DispatchResult:
                 .first()
             )
             if locked is None:
-                continue  # outro agendador está cuidando desta execução
+                continue
             tasks = list(
                 TaskInstance.objects.filter(run_id=run_id)
                 .order_by("id")
@@ -321,7 +329,7 @@ def dispatch(now: datetime | None = None) -> DispatchResult:
             ready_ids: list[int] = []
             skip_ids: list[int] = []
             changed = True
-            while changed:  # pular uma tarefa pode liberar (ou pular) as seguintes
+            while changed:
                 changed = False
                 for t in tasks:
                     name = t["task_name"]
@@ -363,9 +371,7 @@ def set_message_id(task_id: int, message_id: str) -> None:
     TaskInstance.objects.filter(id=task_id, status="queued").update(queue_message_id=message_id)
 
 
-# ================================================================== recuperação
 def recover_expired_leases() -> list[dict[str, Any]]:
-    """Tarefas 'running' cujo worker parou de mandar heartbeat (queda, OOM, rede)."""
     recovered: list[dict[str, Any]] = []
     with transaction.atomic():
         rows = list(
@@ -402,10 +408,12 @@ def recover_expired_leases() -> list[dict[str, Any]]:
     return recovered
 
 
-def _after_failure(t: TaskInstance, *, now: datetime) -> tuple[str, datetime | None, datetime | None]:
+def _after_failure(
+    t: TaskInstance, *, now: datetime, retry: bool = True
+) -> tuple[str, datetime | None, datetime | None]:
     if t.cancel_requested:
         return "cancelled", None, now
-    if t.attempts < t.max_attempts:
+    if retry and t.attempts < t.max_attempts:
         delay = retry_delay(t.attempts, t.retry_delay, t.retry_backoff, t.max_retry_delay)
         return "retry_wait", now + timedelta(seconds=delay), None
     return "failed", None, now
@@ -443,7 +451,6 @@ def mark_offline_workers(silent_seconds: float) -> list[str]:
 
 
 def housekeeping(retention_days: int) -> dict[str, int]:
-    """Apaga o que passou do prazo. As filhas somem pelo ON DELETE CASCADE do próprio banco."""
     day = 86_400
     with transaction.atomic():
         runs, _ = WorkflowRun.objects.filter(
@@ -460,7 +467,6 @@ def housekeeping(retention_days: int) -> dict[str, int]:
     return {"runs": runs, "tokens": tokens, "workers": workers, "audit": audit_rows, "deliveries": deliveries}
 
 
-# ======================================================================= worker
 def register_worker(
     worker_id: str, hostname: str, pid: int, queues: list[str], concurrency: int, version: str
 ) -> None:
@@ -480,7 +486,7 @@ def register_worker(
                 stopped_at=None,
             )
         ],
-        update_conflicts=True,  # INSERT ... ON DUPLICATE KEY UPDATE pela chave primária
+        update_conflicts=True,
         update_fields=[
             "hostname",
             "pid",
@@ -520,9 +526,7 @@ class Claim:
 
 
 def claim(task_id: int, worker_id: str, lease_seconds: float) -> Claim | None:
-    """Assume a tarefa se ela ainda estiver na fila. Mensagem repetida -> None."""
     with transaction.atomic():
-        # Trava a linha (leitura atual do InnoDB); se outro worker assumiu antes, o filtro já não bate e não volta nada.
         t = (
             TaskInstance.objects.select_for_update(of=("self",))
             .filter(id=task_id, status="queued", run__status="running")
@@ -567,7 +571,6 @@ def claim(task_id: int, worker_id: str, lease_seconds: float) -> Claim | None:
 def task_heartbeat(
     task_id: int, attempt: int, lease_seconds: float, progress: int | None = None
 ) -> tuple[bool, bool]:
-    """Renova a posse da tarefa. Devolve (ainda_e_minha, cancelamento_pedido)."""
     changes: dict[str, Any] = {"lease_expires_at": db_now_plus(lease_seconds)}
     if progress is not None:
         changes["progress"] = progress
@@ -586,8 +589,8 @@ def finish(
     error: str | None = None,
     traceback: str | None = None,
     duration_ms: int | None = None,
+    retry: bool = True,
 ) -> str | None:
-    """Fecha a tentativa e decide o próximo estado da tarefa. ``None`` = perdeu a posse."""
     now = utcnow()
     with transaction.atomic():
         t = (
@@ -609,8 +612,10 @@ def finish(
             new_status, ready_at, finished = "succeeded", None, now
         elif outcome == "cancelled":
             new_status, ready_at, finished = "cancelled", None, now
+        elif outcome == "skipped" and not t.cancel_requested:
+            new_status, ready_at, finished = "skipped", None, now
         else:
-            new_status, ready_at, finished = _after_failure(t, now=now)
+            new_status, ready_at, finished = _after_failure(t, now=now, retry=retry)
         succeeded = new_status == "succeeded"
         TaskInstance.objects.filter(id=t.id).update(
             status=new_status,
@@ -629,7 +634,6 @@ def finish(
 def append_logs(attempt_id: int, lines: list[tuple[datetime, str, str]]) -> list[dict[str, Any]]:
     if not lines:
         return []
-    # Uma a uma: o MySQL não devolve os ids gerados num INSERT em lote, e o painel precisa deles.
     with transaction.atomic():
         rows = [
             TaskLog.objects.create(attempt_id=attempt_id, logged_at=ts, level=level, message=message[:8000])
@@ -638,7 +642,6 @@ def append_logs(attempt_id: int, lines: list[tuple[datetime, str, str]]) -> list
     return [{"id": r.id, "logged_at": r.logged_at, "level": r.level, "message": r.message} for r in rows]
 
 
-# ========================================================== ações do operador
 def cancel_run(run_id: int, user_id: int | None = None) -> dict[str, Any]:
     with transaction.atomic():
         run = WorkflowRun.objects.select_for_update().filter(id=run_id).first()
@@ -663,11 +666,6 @@ def cancel_run(run_id: int, user_id: int | None = None) -> dict[str, Any]:
 
 
 def retry_run(run_id: int, *, from_task: str | None = None, user_id: int | None = None) -> dict[str, Any]:
-    """Retoma a execução: refaz só o que falhou (ou ``from_task`` e o que vem depois).
-
-    O que já terminou com sucesso é mantido, inclusive o resultado, então a
-    execução continua exatamente de onde parou.
-    """
     with transaction.atomic():
         run = (
             WorkflowRun.objects.select_for_update(of=("self",))
@@ -719,7 +717,6 @@ def set_paused(name: str, paused: bool, user_id: int | None = None) -> dict[str,
             raise LookupError(name)
         changes: dict[str, Any] = {"is_paused": paused, "updated_at": Now()}
         if not paused and wf.schedule:
-            # ao retomar, segue a agenda a partir de agora (não dispara horários perdidos)
             changes["next_run_at"] = next_fire(wf.schedule, wf.timezone, utcnow())
         Workflow.objects.filter(pk=wf.pk).update(**changes)
         audit(user_id, "workflow.pause" if paused else "workflow.resume", f"workflow:{name}", {})
@@ -728,3 +725,292 @@ def set_paused(name: str, paused: bool, user_id: int | None = None) -> dict[str,
 
 def audit(user_id: int | None, action: str, target: str | None, details: dict[str, Any]) -> None:
     AuditLog.objects.create(user_id=user_id, action=action, target=target, details=details)
+
+
+TASK_STATUS_PT = {"succeeded": "sucesso", "failed": "falha", "skipped": "pulada"}
+
+
+def run_workflow_names(run_ids: list[int]) -> dict[int, str]:
+    if not run_ids:
+        return {}
+    return dict(WorkflowRun.objects.filter(id__in=run_ids).values_list("id", "workflow__name"))
+
+
+def _fmt_seconds(seconds: float) -> str:
+    seconds = int(seconds)
+    if seconds < 120:
+        return f"{seconds} s"
+    if seconds < 7200:
+        return f"{seconds // 60} min"
+    return f"{seconds // 3600} h {seconds % 3600 // 60:02d} min"
+
+
+def expire_runs(now: datetime | None = None) -> list[dict[str, Any]]:
+    now = now or utcnow()
+    expired: list[dict[str, Any]] = []
+    candidates = (
+        WorkflowRun.objects.filter(status="running", started_at__isnull=False)
+        .select_related("version", "workflow")
+        .only("id", "started_at", "version__graph", "workflow__name")
+        .order_by("id")[:500]
+    )
+    for run in candidates:
+        limit = (run.version.graph or {}).get("run_timeout")
+        if not limit or run.started_at + timedelta(seconds=float(limit)) > now:
+            continue
+        reason = f"Tempo limite da execução ({_fmt_seconds(limit)}) atingido."
+        with transaction.atomic():
+            locked = (
+                WorkflowRun.objects.select_for_update(skip_locked=True)
+                .filter(id=run.id, status="running")
+                .values_list("id", flat=True)
+                .first()
+            )
+            if locked is None:
+                continue
+            TaskInstance.objects.filter(run_id=run.id, status__in=("pending", "queued", "retry_wait")).update(
+                status="cancelled", finished_at=Now(), ready_at=None, error=reason, updated_at=Now()
+            )
+            stopping = TaskInstance.objects.filter(run_id=run.id, status="running").update(
+                cancel_requested=True, updated_at=Now()
+            )
+            WorkflowRun.objects.filter(id=run.id).update(
+                status="failed", finished_at=Now(), error=reason, updated_at=Now()
+            )
+            integrations.enqueue([run.id], "run.failed")
+            audit(None, "run.timeout", f"run:{run.id}", {"limit_seconds": limit, "stopping_tasks": stopping})
+        expired.append({"id": run.id, "workflow": run.workflow.name, "reason": reason})
+    return expired
+
+
+def schedule_slots(expr: str, timezone: str, start: datetime, end: datetime, limit: int) -> list[datetime]:
+    out: list[datetime] = []
+    current = next_fire(expr, timezone, start - timedelta(microseconds=1))
+    while current <= end and len(out) <= limit:
+        out.append(current)
+        current = next_fire(expr, timezone, current)
+    return out
+
+
+def backfill(
+    name: str,
+    *,
+    start: date,
+    end: date,
+    params: dict[str, Any] | None = None,
+    note: str | None = None,
+    user_id: int | None = None,
+    dry_run: bool = False,
+    skip_existing: bool = True,
+    limit: int = 366,
+) -> dict[str, Any]:
+    from zoneinfo import ZoneInfo
+
+    if end < start:
+        raise StoreValidationError({"end": "A data final precisa ser igual ou depois da inicial."})
+    wf = Workflow.objects.select_related("current_version").filter(name=name, current_version__isnull=False).first()
+    if wf is None:
+        raise LookupError(name)
+    if not wf.is_active:
+        raise StoreError(f"O workflow {name} não está mais na pasta de workflows.")
+    if not wf.schedule:
+        raise StoreError("Só workflows com agenda podem ser reprocessados por período.")
+    tz = ZoneInfo(wf.timezone)
+    begin = datetime.combine(start, dtime.min, tz)
+    finish_at = min(datetime.combine(end, dtime.max, tz), utcnow())
+    if finish_at < begin:
+        raise StoreValidationError({"start": "O período escolhido ainda não começou."})
+    slots = schedule_slots(wf.schedule, wf.timezone, begin, finish_at, limit)
+    if len(slots) > limit:
+        raise StoreValidationError(
+            {"end": f"O período tem mais de {limit} horários agendados. Escolha um intervalo menor."}
+        )
+    merged = validate_params(wf, params)
+    existing: set[datetime] = set()
+    if skip_existing and slots:
+        existing = set(
+            WorkflowRun.objects.filter(workflow=wf, logical_date__in=slots)
+            .exclude(status__in=("failed", "cancelled"))
+            .values_list("logical_date", flat=True)
+        )
+    todo = [s for s in slots if s not in existing]
+    skipped = [s for s in slots if s in existing]
+    created: list[int] = []
+    if not dry_run and todo:
+        label = note or f"Reprocessamento de {start.strftime('%d/%m/%Y')} a {end.strftime('%d/%m/%Y')}"
+        with transaction.atomic():
+            for slot in todo:
+                run_id = create_run(
+                    wf, trigger="backfill", params=merged, triggered_by=user_id, logical_date=slot, note=label
+                )
+                if run_id:
+                    created.append(run_id)
+            audit(
+                user_id,
+                "run.backfill",
+                f"workflow:{name}",
+                {
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                    "runs": len(created),
+                    "params": mask_params(wf.params_schema, params or {}),
+                },
+            )
+    return {
+        "workflow": name,
+        "dry_run": dry_run,
+        "slots": [s.isoformat() for s in todo],
+        "skipped": [s.isoformat() for s in skipped],
+        "created": created,
+    }
+
+
+def mark_task(run_id: int, name: str, status: str, *, user_id: int | None = None) -> dict[str, Any]:
+    if status not in TASK_STATUS_PT:
+        raise StoreValidationError({"status": "Use succeeded, failed ou skipped."})
+    with transaction.atomic():
+        run = (
+            WorkflowRun.objects.select_for_update(of=("self",))
+            .select_related("version")
+            .filter(id=run_id)
+            .first()
+        )
+        if run is None:
+            raise LookupError(run_id)
+        if run.status in ("queued", "running"):
+            raise StoreError("A execução ainda está em andamento. Aguarde terminar ou cancele antes.")
+        task = TaskInstance.objects.select_for_update().filter(run_id=run_id, task_name=name).first()
+        if task is None:
+            raise LookupError(name)
+        if task.status == status:
+            raise StoreError(f"A tarefa já está como {TASK_STATUS_PT[status]}.")
+        message = None if status == "succeeded" else f"Marcada como {TASK_STATUS_PT[status]} pelo operador."
+        TaskInstance.objects.filter(id=task.id).update(
+            status=status,
+            error=message,
+            progress=100 if status == "succeeded" else F("progress"),
+            finished_at=Coalesce("finished_at", Now()),
+            ready_at=None,
+            cancel_requested=False,
+            updated_at=Now(),
+        )
+        statuses = dict(TaskInstance.objects.filter(run_id=run_id).values_list("task_name", "status"))
+        reset: set[str] = set()
+        if status in ("succeeded", "skipped"):
+            below = descendants(run.version.graph, name)
+            reset = {n for n, st in statuses.items() if n in below and st in ("skipped", "cancelled")}
+        if reset:
+            TaskInstance.objects.filter(run_id=run_id, task_name__in=sorted(reset)).update(
+                status="pending",
+                max_attempts=F("attempts") + F("retries") + 1,
+                output=None,
+                error=None,
+                progress=None,
+                ready_at=None,
+                queued_at=None,
+                started_at=None,
+                finished_at=None,
+                queue_message_id=None,
+                cancel_requested=False,
+                worker=None,
+                lease_expires_at=None,
+                updated_at=Now(),
+            )
+            run_status = "queued"
+            WorkflowRun.objects.filter(id=run_id).update(
+                status="queued", finished_at=None, error=None, updated_at=Now()
+            )
+        else:
+            run_status = run_outcome(list(statuses.values()))
+            WorkflowRun.objects.filter(id=run_id).update(
+                status=run_status, error=None if run_status == "succeeded" else F("error"), updated_at=Now()
+            )
+        audit(user_id, "run.mark", f"run:{run_id}", {"task": name, "status": status, "reset": sorted(reset)})
+    return {"id": run_id, "task": name, "status": status, "reset": sorted(reset), "run_status": run_status}
+
+
+def delete_run(run_id: int, *, user_id: int | None = None) -> None:
+    with transaction.atomic():
+        run = WorkflowRun.objects.select_for_update().select_related("workflow").filter(id=run_id).first()
+        if run is None:
+            raise LookupError(run_id)
+        if run.status in ("queued", "running"):
+            raise StoreError("Cancele a execução antes de excluir.")
+        audit(user_id, "run.delete", f"run:{run_id}", {"workflow": run.workflow.name, "status": run.status})
+        run.delete()
+
+
+BULK_RUN_ACTIONS = ("cancel", "retry", "delete")
+
+
+def bulk_runs(action: str, ids: list[int], *, user_id: int | None = None) -> dict[str, Any]:
+    if action not in BULK_RUN_ACTIONS:
+        raise StoreValidationError({"action": "Use cancel, retry ou delete."})
+    done: list[int] = []
+    errors: dict[str, str] = {}
+    for run_id in sorted(set(ids)):
+        try:
+            if action == "cancel":
+                cancel_run(run_id, user_id)
+            elif action == "retry":
+                retry_run(run_id, user_id=user_id)
+            else:
+                delete_run(run_id, user_id=user_id)
+            done.append(run_id)
+        except LookupError:
+            errors[str(run_id)] = "Execução não encontrada."
+        except StoreError as exc:
+            errors[str(run_id)] = str(exc)
+    return {"action": action, "done": done, "errors": errors}
+
+
+def bulk_workflows(action: str, names: list[str] | None, *, user_id: int | None = None) -> dict[str, Any]:
+    if action not in ("pause", "resume"):
+        raise StoreValidationError({"action": "Use pause ou resume."})
+    paused = action == "pause"
+    qs = Workflow.objects.filter(is_active=True, schedule__isnull=False, is_paused=not paused)
+    if names is not None:
+        qs = qs.filter(name__in=names)
+    changed = []
+    for name in qs.order_by("name").values_list("name", flat=True):
+        set_paused(name, paused, user_id)
+        changed.append(name)
+    return {"action": action, "changed": changed}
+
+
+def workflow_versions(name: str, limit: int = 50) -> list[dict[str, Any]] | None:
+    wf = Workflow.objects.filter(name=name).only("id", "current_version_id").first()
+    if wf is None:
+        return None
+    from django.db.models import Count
+
+    versions = list(
+        WorkflowVersion.objects.filter(workflow=wf)
+        .annotate(runs_count=Count("runs"))
+        .order_by("-version")
+        .values("id", "version", "fingerprint", "graph", "created_at", "runs_count")[: limit + 1]
+    )
+    out = []
+    for i, v in enumerate(versions[:limit]):
+        previous = versions[i + 1]["graph"] if i + 1 < len(versions) else None
+        out.append(
+            {
+                "version": v["version"],
+                "fingerprint": v["fingerprint"],
+                "created_at": v["created_at"],
+                "tasks": len(v["graph"]["tasks"]),
+                "runs": v["runs_count"],
+                "current": v["id"] == wf.current_version_id,
+                "changes": diff_graphs(previous, v["graph"]) if previous is not None else None,
+            }
+        )
+    return out
+
+
+def set_note(run_id: int, note: str | None, *, user_id: int | None = None) -> bool:
+    note = (note or "").strip() or None
+    with transaction.atomic():
+        changed = WorkflowRun.objects.filter(id=run_id).update(note=note, updated_at=Now())
+        if changed:
+            audit(user_id, "run.note", f"run:{run_id}", {"note": note})
+    return bool(changed)

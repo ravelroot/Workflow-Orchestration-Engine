@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="713pt" height="367pt"
+ viewBox="0.00 0.00 712.80 367.36" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 352.96)">
+<title>tarefa</title>
+<g id="node1" class="node">
+<title>pending</title>
+<path fill="#fdfbfa" stroke="#d9c3b6" stroke-width="2" d="M42,-59.56C42,-59.56 12,-59.56 12,-59.56 6,-59.56 0,-53.56 0,-47.56 0,-47.56 0,-35.56 0,-35.56 0,-29.56 6,-23.56 12,-23.56 12,-23.56 42,-23.56 42,-23.56 48,-23.56 54,-29.56 54,-35.56 54,-35.56 54,-47.56 54,-47.56 54,-53.56 48,-59.56 42,-59.56"/>
+<text text-anchor="start" x="8.5" y="-39.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">pending</text>
+</g>
+<g id="node2" class="node">
+<title>queued</title>
+<path fill="#fdfbfa" stroke="#8a9eab" stroke-width="2" d="M203,-271.56C203,-271.56 173,-271.56 173,-271.56 167,-271.56 161,-265.56 161,-259.56 161,-259.56 161,-247.56 161,-247.56 161,-241.56 167,-235.56 173,-235.56 173,-235.56 203,-235.56 203,-235.56 209,-235.56 215,-241.56 215,-247.56 215,-247.56 215,-259.56 215,-259.56 215,-265.56 209,-271.56 203,-271.56"/>
+<text text-anchor="start" x="172" y="-251.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">queued</text>
+</g>
+<g id="edge1" class="edge">
+<title>pending&#45;&gt;queued</title>
+<path fill="none" stroke="#8a9eab" d="M41.56,-59.64C70.25,-97.89 137.1,-187.03 169.19,-229.81"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="167.32,-231.4 173.48,-235.53 171.24,-228.46 167.32,-231.4"/>
+<text text-anchor="middle" x="107.5" y="-194.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">dependências ok</text>
+</g>
+<g id="node7" class="node">
+<title>skipped</title>
+<path fill="#fdfbfa" stroke="#ebe0dd" stroke-width="2" d="M535.5,-109.56C535.5,-109.56 505.5,-109.56 505.5,-109.56 499.5,-109.56 493.5,-103.56 493.5,-97.56 493.5,-97.56 493.5,-85.56 493.5,-85.56 493.5,-79.56 499.5,-73.56 505.5,-73.56 505.5,-73.56 535.5,-73.56 535.5,-73.56 541.5,-73.56 547.5,-79.56 547.5,-85.56 547.5,-85.56 547.5,-97.56 547.5,-97.56 547.5,-103.56 541.5,-109.56 535.5,-109.56"/>
+<text text-anchor="start" x="502" y="-89.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">skipped</text>
+</g>
+<g id="edge2" class="edge">
+<title>pending&#45;&gt;skipped</title>
+<path fill="none" stroke="#8a9eab" d="M54.1,-37.92C123.46,-29.21 317.39,-11.27 468,-58.56 475.83,-61.02 483.63,-65.01 490.71,-69.37"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="489.77,-71.69 496.98,-73.45 492.45,-67.58 489.77,-71.69"/>
+<text text-anchor="middle" x="264.5" y="-41.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">dependência</text>
+<text text-anchor="middle" x="264.5" y="-32.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">sem sucesso</text>
+</g>
+<g id="node3" class="node">
+<title>running</title>
+<path fill="#fdfbfa" stroke="#4c6170" stroke-width="2" d="M360,-199.56C360,-199.56 330,-199.56 330,-199.56 324,-199.56 318,-193.56 318,-187.56 318,-187.56 318,-175.56 318,-175.56 318,-169.56 324,-163.56 330,-163.56 330,-163.56 360,-163.56 360,-163.56 366,-163.56 372,-169.56 372,-175.56 372,-175.56 372,-187.56 372,-187.56 372,-193.56 366,-199.56 360,-199.56"/>
+<text text-anchor="start" x="326.5" y="-179.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">running</text>
+</g>
+<g id="edge3" class="edge">
+<title>queued&#45;&gt;running</title>
+<path fill="none" stroke="#8a9eab" d="M215.29,-241.35C241.76,-229.06 282.65,-210.06 311.22,-196.79"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="312.52,-198.89 317.84,-193.72 310.46,-194.44 312.52,-198.89"/>
+<text text-anchor="middle" x="264.5" y="-234.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">worker assume</text>
+</g>
+<g id="node8" class="node">
+<title>cancelled</title>
+<path fill="#fdfbfa" stroke="#65695b" stroke-width="2" d="M540.5,-338.56C540.5,-338.56 500.5,-338.56 500.5,-338.56 494.5,-338.56 488.5,-332.56 488.5,-326.56 488.5,-326.56 488.5,-314.56 488.5,-314.56 488.5,-308.56 494.5,-302.56 500.5,-302.56 500.5,-302.56 540.5,-302.56 540.5,-302.56 546.5,-302.56 552.5,-308.56 552.5,-314.56 552.5,-314.56 552.5,-326.56 552.5,-326.56 552.5,-332.56 546.5,-338.56 540.5,-338.56"/>
+<text text-anchor="start" x="496.5" y="-318.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">cancelled</text>
+</g>
+<g id="edge10" class="edge">
+<title>queued&#45;&gt;cancelled</title>
+<path fill="none" stroke="#8a9eab" d="M214.63,-271.7C220.45,-275.12 226.76,-278.32 233,-280.56 318.05,-311.08 425.07,-318.46 481.16,-320.15"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="481.34,-322.61 488.41,-320.35 481.47,-317.71 481.34,-322.61"/>
+<text text-anchor="middle" x="345" y="-314.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">cancelar</text>
+</g>
+<g id="node4" class="node">
+<title>retry_wait</title>
+<path fill="#fdfbfa" stroke="#c09550" stroke-width="2" d="M543,-261.56C543,-261.56 498,-261.56 498,-261.56 492,-261.56 486,-255.56 486,-249.56 486,-249.56 486,-237.56 486,-237.56 486,-231.56 492,-225.56 498,-225.56 498,-225.56 543,-225.56 543,-225.56 549,-225.56 555,-231.56 555,-237.56 555,-237.56 555,-249.56 555,-249.56 555,-255.56 549,-261.56 543,-261.56"/>
+<text text-anchor="start" x="494" y="-241.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">retry_wait</text>
+</g>
+<g id="edge6" class="edge">
+<title>running&#45;&gt;retry_wait</title>
+<path fill="none" stroke="#8a9eab" d="M372.35,-181.99C397.86,-183.28 437.08,-187.63 468,-201.56 478.26,-206.18 488.17,-213.38 496.51,-220.51"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="495.17,-222.59 502.03,-225.41 498.42,-218.93 495.17,-222.59"/>
+<text text-anchor="middle" x="431" y="-213.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">erro com</text>
+<text text-anchor="middle" x="431" y="-204.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">retentativa</text>
+</g>
+<g id="node5" class="node">
+<title>succeeded</title>
+<path fill="#fdfbfa" stroke="#9ca38e" stroke-width="2" d="M672,-112.56C672,-112.56 632,-112.56 632,-112.56 626,-112.56 620,-106.56 620,-100.56 620,-100.56 620,-88.56 620,-88.56 620,-82.56 626,-76.56 632,-76.56 632,-76.56 672,-76.56 672,-76.56 678,-76.56 684,-82.56 684,-88.56 684,-88.56 684,-100.56 684,-100.56 684,-106.56 678,-112.56 672,-112.56"/>
+<text text-anchor="start" x="628" y="-92.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">succeeded</text>
+</g>
+<g id="edge4" class="edge">
+<title>running&#45;&gt;succeeded</title>
+<path fill="none" stroke="#8a9eab" d="M372,-174.15C425.82,-158.79 549.65,-123.47 612.66,-105.5"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="613.61,-107.78 619.67,-103.5 612.27,-103.06 613.61,-107.78"/>
+<text text-anchor="middle" x="520.5" y="-144.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">resultado</text>
+</g>
+<g id="node6" class="node">
+<title>failed</title>
+<path fill="#fdfbfa" stroke="#a04e3c" stroke-width="2" d="M535.5,-48.56C535.5,-48.56 505.5,-48.56 505.5,-48.56 499.5,-48.56 493.5,-42.56 493.5,-36.56 493.5,-36.56 493.5,-24.56 493.5,-24.56 493.5,-18.56 499.5,-12.56 505.5,-12.56 505.5,-12.56 535.5,-12.56 535.5,-12.56 541.5,-12.56 547.5,-18.56 547.5,-24.56 547.5,-24.56 547.5,-36.56 547.5,-36.56 547.5,-42.56 541.5,-48.56 535.5,-48.56"/>
+<text text-anchor="start" x="504.5" y="-28.36" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">failed</text>
+</g>
+<g id="edge8" class="edge">
+<title>running&#45;&gt;failed</title>
+<path fill="none" stroke="#8a9eab" d="M350.69,-163.31C357.11,-141.65 370.6,-105.69 394,-83.56 419.87,-59.1 458.72,-45.08 486.33,-37.68"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="487.27,-39.97 493.44,-35.85 486.05,-35.22 487.27,-39.97"/>
+<text text-anchor="middle" x="431" y="-95.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">erro definitivo</text>
+<text text-anchor="middle" x="431" y="-86.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">ou sem tentativas</text>
+</g>
+<g id="edge5" class="edge">
+<title>running&#45;&gt;skipped</title>
+<path fill="none" stroke="#8a9eab" d="M360.38,-163.52C369.17,-153.5 381.17,-141.5 394,-133.56 409.62,-123.9 454.69,-109.92 486.33,-100.79"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="487.2,-103.09 493.26,-98.8 485.85,-98.38 487.2,-103.09"/>
+<text text-anchor="middle" x="431" y="-136.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">ctx.skip()</text>
+</g>
+<g id="edge9" class="edge">
+<title>running&#45;&gt;cancelled</title>
+<path fill="none" stroke="#8a9eab" d="M367.4,-199.61C375.67,-206.52 385.24,-214.46 394,-221.56 426.87,-248.21 465.1,-278.23 490.65,-298.16"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="489.19,-300.13 496.22,-302.5 492.21,-296.27 489.19,-300.13"/>
+<text text-anchor="middle" x="431" y="-280.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">pedido de parada</text>
+</g>
+<g id="edge7" class="edge">
+<title>retry_wait&#45;&gt;queued</title>
+<path fill="none" stroke="#8a9eab" d="M485.81,-256.38C479.95,-258.11 473.86,-259.62 468,-260.56 380.28,-274.67 275.07,-264.97 222.44,-258.34"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="222.63,-255.89 215.37,-257.43 222,-260.75 222.63,-255.89"/>
+<text text-anchor="middle" x="345" y="-270.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">espera acabou</text>
+</g>
+<g id="edge12" class="edge">
+<title>failed&#45;&gt;pending</title>
+<path fill="none" stroke="#8a9eab" d="M493.48,-25.02C443.23,-14.97 329.29,4.69 233,-1.56 160.99,-6.24 141.57,-3.41 72,-22.56 68.29,-23.58 64.48,-24.86 60.74,-26.26"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="59.7,-24.03 54.09,-28.89 61.51,-28.59 59.7,-24.03"/>
+<text text-anchor="middle" x="264.5" y="-4.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">retomar</text>
+</g>
+<g id="edge11" class="edge">
+<title>failed&#45;&gt;succeeded</title>
+<path fill="none" stroke="#8a9eab" d="M547.71,-43.51C566.59,-52.85 592.36,-65.58 613.44,-76"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="612.45,-78.24 619.81,-79.15 614.62,-73.85 612.45,-78.24"/>
+<text text-anchor="middle" x="587.5" y="-73.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">marcar</text>
+</g>
+</g>
+</svg>

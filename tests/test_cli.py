@@ -1,5 +1,3 @@
-"""Linha de comando: cliente HTTP (contra a API em memória) e comandos locais."""
-
 from __future__ import annotations
 
 import re
@@ -142,3 +140,47 @@ def test_comandos_locais(db, capsys, monkeypatch, tmp_path):
         cli.main(["users", "create", "--email", "cli@delco.dev", "--name", "x", "--password", "Senha1234"])
     with pytest.raises(SystemExit):
         cli.main(["--version"])
+
+
+def test_comandos_novos_da_cli(cli_env, workers, capsys, monkeypatch):
+    monkeypatch.setenv("DELCO_PASSWORD", DEMO_PASSWORD)
+    run_cli(capsys, "login", "--email", "operador@delco.dev")
+    code, out = run_cli(capsys, "show", "controle")
+    assert code == 0 and "lote (integer)" in out and "repete só ConnectionError" in out
+    code, out = run_cli(capsys, "trigger", "controle", "-p", "lote=7", "--dry-run")
+    assert '"lote": 7' in out
+    with pytest.raises(SystemExit, match="params.lote"):
+        cli.main(["trigger", "controle", "-p", "lote=900"])
+    code, out = run_cli(capsys, "backfill", "diario", "--from", "2026-10-01", "--to", "2026-10-03", "--dry-run")
+    assert "3 execução(ões) seriam criadas" in out
+    workers()
+    code, out = run_cli(capsys, "backfill", "diario", "--from", "2026-10-01", "--to", "2026-10-02")
+    assert "2 execução(ões) criadas" in out
+    code, out = run_cli(capsys, "runs", "--trigger", "backfill", "--json")
+    data = __import__("json").loads(out)
+    assert data["total"] == 2 and {r["trigger"] for r in data["items"]} == {"backfill"}
+    code, out = run_cli(capsys, "trigger", "quebra", "--wait")
+    quebra = created_run(out)
+    code, out = run_cli(capsys, "mark", quebra, "processar", "--status", "succeeded")
+    assert "retomada a partir de: publicar" in out
+    code, out = run_cli(capsys, "note", quebra, "conferido")
+    assert "atualizada" in out
+    code, out = run_cli(capsys, "versions", "controle")
+    assert "primeira versão" in out
+    code, out = run_cli(capsys, "workers", "--json")
+    worker_id = __import__("json").loads(out)[0]["id"]
+    code, out = run_cli(capsys, "workers", "pause", worker_id)
+    assert "pausado" in out
+    code, out = run_cli(capsys, "workers", "resume", worker_id)
+    assert "retomado" in out
+    code, out = run_cli(capsys, "logs", quebra, "processar", "--level", "error")
+    assert "ValueError" in out and "INFO" not in out
+
+
+def test_doctor_e_config(db, capsys):
+    code, out = run_cli(capsys, "doctor")
+    assert code == 1 and "Agendador" in out and "Nenhum agendador ativo" in out
+    code, out = run_cli(capsys, "doctor", "--json")
+    assert '"status": "error"' in out
+    code, out = run_cli(capsys, "config", "--json")
+    assert code == 0 and '"lease_seconds": 2.0' in out

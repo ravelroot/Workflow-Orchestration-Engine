@@ -1,5 +1,3 @@
-"""WebSocket do painel (Django Channels): eventos ao vivo de execuções, tarefas, workers e logs."""
-
 from __future__ import annotations
 
 import json
@@ -13,12 +11,6 @@ from .events import ALL, attempt_group, listener
 
 
 class EventsConsumer(AsyncWebsocketConsumer):
-    """Conexão autenticada pelo token em ``?token=``. Mensagens aceitas do navegador:
-
-    ``{"action": "logs", "attempt_id": 7}`` passa a receber o log daquela tentativa;
-    ``{"action": "unlogs"}`` para; ``{"action": "ping"}`` responde ``{"type": "pong"}``.
-    """
-
     log_group: str | None = None
 
     async def connect(self) -> None:

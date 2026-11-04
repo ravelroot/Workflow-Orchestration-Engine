@@ -1,5 +1,3 @@
-"""API HTTP (Django REST Framework) e WebSocket (Django Channels)."""
-
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +13,6 @@ from .conftest import tasks_of
 
 
 def django_client(**kwargs) -> httpx.Client:
-    """Cliente HTTP de verdade passando por toda a pilha do Django (middlewares, DRF, WhiteNoise)."""
     from delco.wsgi import application
 
     return httpx.Client(
@@ -36,12 +33,15 @@ def auth(client: httpx.Client, email: str = "admin@delco.dev") -> dict[str, str]
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
-def test_saude_e_painel(client):
+def test_saude_e_painel(client, scheduler):
+    assert client.get("/api/health").json()["scheduler"] is False
+    scheduler.beat()
     assert client.get("/api/health").json() == {
         "status": "ok",
         "database": True,
         "redis": True,
-        "version": "1.1.0",
+        "scheduler": True,
+        "version": "1.2.0",
     }
     page = client.get("/")
     assert page.status_code == 200 and "Delco" in page.text
@@ -188,7 +188,7 @@ def test_troca_de_senha(client):
     )
     assert r.status_code == 204
     assert client.get("/api/auth/me", headers=headers).status_code == 200
-    assert client.get("/api/auth/me", headers=other).status_code == 401  # outras sessões encerradas
+    assert client.get("/api/auth/me", headers=other).status_code == 401
     assert (
         client.post(
             "/api/auth/login", json={"email": "operador@delco.dev", "password": "Nova12345"}
@@ -259,7 +259,7 @@ def test_websocket_recebe_eventos(client, bus):
         await ws.send_json_to({"action": "logs", "attempt_id": 7})
         await ws.send_json_to({"action": "ping"})
         assert await ws.receive_json_from() == {"type": "pong"}
-        bus.publish("log", attempt_id=99, lines=[])  # outra tentativa: não chega
+        bus.publish("log", attempt_id=99, lines=[])
         bus.publish("log", attempt_id=7, lines=[{"message": "oi"}])
         assert (await ws.receive_json_from(timeout=3))["lines"] == [{"message": "oi"}]
         bus.publish("run", id=5, status="running")

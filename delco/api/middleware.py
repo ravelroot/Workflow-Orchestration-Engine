@@ -1,6 +1,3 @@
-"""Respostas da API nunca vão para cache (dados mudam o tempo todo e podem ser sensíveis)."""
-
-
 class ApiCacheMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

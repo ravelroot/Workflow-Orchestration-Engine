@@ -1,10 +1,3 @@
-"""Código que roda dentro do processo filho de cada tentativa.
-
-Cada tentativa ganha um processo novo: se a tarefa travar, estourar memória ou
-derrubar o interpretador, só o filho morre. O worker continua de pé, registra a
-falha e segue para a próxima.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .context import TaskContext
+from .sdk import Skip
 
 
 class OutputTooLarge(ValueError):
@@ -28,7 +22,6 @@ class OutputTooLarge(ValueError):
 
 
 def _pump_fd(fd: int, level: str, send) -> threading.Thread:
-    """Redireciona um descritor (1 = stdout, 2 = stderr) para o log da tarefa."""
     read_end, write_end = os.pipe()
     os.dup2(write_end, fd)
     os.close(write_end)
@@ -54,11 +47,11 @@ class _PipeHandler(logging.Handler):
         level = "error" if record.levelno >= logging.ERROR else self.MAP.get(record.levelno, "info")
         try:
             self.send(("log", level, self.format(record)))
-        except Exception:  # pragma: no cover
+        except Exception:
             pass
 
 
-def _call(fn, ctx: TaskContext) -> Any:
+def call_task(fn, ctx: TaskContext) -> Any:
     try:
         wants_ctx = len(inspect.signature(fn).parameters) > 0
     except (TypeError, ValueError):
@@ -76,7 +69,7 @@ async def _await(awaitable):
 def child_main(conn: Connection, payload: dict[str, Any]) -> None:
     if hasattr(os, "setsid"):
         try:
-            os.setsid()  # grupo próprio: ao matar a tarefa, os subprocessos dela também morrem
+            os.setsid()
         except OSError:
             pass
     lock = threading.Lock()
@@ -93,19 +86,20 @@ def child_main(conn: Connection, payload: dict[str, Any]) -> None:
         sys.stdout.flush()
         sys.stderr.flush()
         pumps = [_pump_fd(1, "info", send), _pump_fd(2, "warning", send)]
-        sys.stdout.reconfigure(line_buffering=True)  # type: ignore[union-attr]
-        sys.stderr.reconfigure(line_buffering=True)  # type: ignore[union-attr]
-    except (OSError, AttributeError, ValueError):  # pragma: no cover - ambientes sem fd reais
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except (OSError, AttributeError, ValueError):
         pumps = []
     root = logging.getLogger()
     root.handlers[:] = [_PipeHandler(send)]
     root.setLevel(logging.INFO)
 
     message: tuple
+    task = None
     try:
         from .loader import find_task
 
-        fn = find_task(
+        task = find_task(
             Path(payload["workflows_dir"]), payload["source_file"], payload["workflow"], payload["task"]
         )
         logical = payload.get("logical_date")
@@ -121,7 +115,7 @@ def child_main(conn: Connection, payload: dict[str, Any]) -> None:
             logical_date=datetime.fromisoformat(logical) if logical else None,
             _send=send,
         )
-        result = _call(fn, ctx)
+        result = call_task(task.fn, ctx)
         encoded = json.dumps(result, default=str, ensure_ascii=False)
         if len(encoded.encode()) > payload["max_output_bytes"]:
             raise OutputTooLarge(
@@ -129,19 +123,29 @@ def child_main(conn: Connection, payload: dict[str, Any]) -> None:
                 "Grave dados grandes em arquivo ou banco e devolva só a referência."
             )
         message = ("result", json.loads(encoded))
-    except BaseException as exc:  # inclui SystemExit e KeyboardInterrupt da tarefa
-        message = ("error", type(exc).__name__, str(exc) or type(exc).__name__, traceback.format_exc())
+    except BaseException as exc:
+        if isinstance(exc, Skip):
+            message = ("skip", exc.reason)
+        else:
+            retryable = not isinstance(exc, OutputTooLarge) and (task.should_retry(exc) if task else True)
+            message = (
+                "error",
+                type(exc).__name__,
+                str(exc) or type(exc).__name__,
+                traceback.format_exc(),
+                retryable,
+            )
     finally:
         try:
             sys.stdout.flush()
             sys.stderr.flush()
-        except Exception:  # pragma: no cover
+        except Exception:
             pass
     if pumps:
         try:
             os.close(1)
             os.close(2)
-        except OSError:  # pragma: no cover
+        except OSError:
             pass
         for p in pumps:
             p.join(timeout=1)

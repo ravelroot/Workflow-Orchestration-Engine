@@ -1,4 +1,3 @@
-// Visualizações: grafo de tarefas (DAG), gráfico de vazão, linha do tempo e grade.
 import { duration, h, icon, STATUS, tooltip, escapeHtml } from "./ui.js";
 
 const W = 184;
@@ -6,7 +5,6 @@ const H = 48;
 const GX = 56;
 const GY = 14;
 
-// ------------------------------------------------------------------ DAG
 function computeLayers(tasks) {
   const layer = new Map();
   for (const t of tasks) {
@@ -40,7 +38,6 @@ function layout(tasks) {
   const nodes = new Map();
   const isChain = layers.length > 6 && layers.every((L) => L.length === 1);
   if (isChain) {
-    // cadeia longa (ex.: 50 passos): quebra em linhas em zigue-zague em vez de uma fila enorme
     const cols = 6;
     const gx = 40;
     const gy = 30;
@@ -117,7 +114,6 @@ export function dagView(tasks, { onSelect, info } = {}) {
     els.set(t.name, { g, meta, pbg, pbar });
   }
 
-  // ---- zoom e arraste
   const view = { x: pad, y: pad, k: 1 };
   const apply = () => root.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`);
   const fit = () => {
@@ -190,7 +186,6 @@ export function dagView(tasks, { onSelect, info } = {}) {
   return { el: outer, update, fit };
 }
 
-// ------------------------------------------------------------- vazão (24 h)
 export function throughputChart(rows) {
   const w = 720;
   const hgt = 210;
@@ -225,7 +220,6 @@ export function throughputChart(rows) {
   return svg;
 }
 
-// --------------------------------------------------------- linha do tempo
 export function gantt(run, onSelect) {
   const started = run.tasks.filter((t) => t.started_at);
   if (!started.length || !run.started_at) return h("p", { class: "muted small" }, "Nenhuma tarefa começou ainda.");
@@ -248,7 +242,6 @@ export function gantt(run, onSelect) {
   return grid;
 }
 
-// ------------------------------------------------- grade (tarefas x execuções)
 export function runGrid(data, workflow) {
   const runs = data.runs;
   const maxDur = Math.max(1, ...runs.map((r) => r.duration_ms || 0));
@@ -276,8 +269,6 @@ export function runGrid(data, workflow) {
   return g;
 }
 
-
-// --------------------------------------------- minigráfico diário (desempenho)
 export function dailySpark(days) {
   const w = 140;
   const hgt = 30;

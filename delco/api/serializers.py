@@ -1,5 +1,3 @@
-"""Validação das entradas da API (corpo e parâmetros de consulta) com serializers do DRF."""
-
 from __future__ import annotations
 
 from rest_framework import serializers
@@ -41,6 +39,7 @@ class TriggerSerializer(serializers.Serializer):
     params = serializers.DictField(required=False, default=dict, help_text='{"dias": 1}')
     note = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=500)
     source = serializers.ChoiceField(choices=["manual", "api", "cli"], required=False, default="manual")
+    dry_run = serializers.BooleanField(required=False, default=False)
 
 
 class RetrySerializer(serializers.Serializer):
@@ -74,8 +73,17 @@ class UpcomingQuerySerializer(serializers.Serializer):
 
 class IntegrationSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, help_text="Alertas do time de dados")
-    kind = serializers.CharField(required=False, help_text="slack | discord | teams | google_chat | webhook | trigger")
+    kind = serializers.CharField(
+        required=False, help_text="slack | discord | teams | google_chat | telegram | email | webhook | trigger"
+    )
     url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    token = serializers.CharField(required=False, allow_blank=True, help_text="Token do bot do Telegram")
+    chat_id = serializers.CharField(required=False, allow_blank=True, help_text="-1001234567890")
+    recipients = serializers.ListField(
+        child=serializers.CharField(), required=False, help_text='["dados@empresa.com"]'
+    )
+    require_signature = serializers.BooleanField(required=False, allow_null=True)
+    rotate_secret = serializers.BooleanField(required=False, default=False)
     events = serializers.ListField(child=serializers.CharField(), required=False, help_text='["run.failed"]')
     workflows = serializers.ListField(child=serializers.CharField(), required=False)
     workflow = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -97,7 +105,58 @@ class LogsQuerySerializer(serializers.Serializer):
 
 
 def valid(serializer_class: type[serializers.Serializer], data) -> dict:
-    """Valida e devolve os dados limpos; erro vira 422 no formato padrão."""
     s = serializer_class(data=data)
     s.is_valid(raise_exception=True)
     return dict(s.validated_data)
+
+
+class PreferencesSerializer(serializers.Serializer):
+    theme = serializers.CharField(required=False)
+    palette = serializers.CharField(required=False)
+    time_zone = serializers.CharField(required=False)
+    density = serializers.CharField(required=False)
+    page_size = serializers.IntegerField(required=False)
+    notify_failures = serializers.BooleanField(required=False)
+    notify_mine = serializers.BooleanField(required=False)
+    log_wrap = serializers.BooleanField(required=False)
+
+
+class BackfillSerializer(serializers.Serializer):
+    start = serializers.DateField(help_text="2026-10-01")
+    end = serializers.DateField(help_text="2026-10-07")
+    params = serializers.DictField(required=False, default=dict)
+    note = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=500)
+    dry_run = serializers.BooleanField(required=False, default=False)
+    skip_existing = serializers.BooleanField(required=False, default=True)
+
+
+class MarkSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=["succeeded", "failed", "skipped"])
+
+
+class BulkRunsSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["cancel", "retry", "delete"])
+    ids = serializers.ListField(child=serializers.IntegerField(min_value=1), min_length=1, max_length=200)
+
+
+class BulkWorkflowsSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["pause", "resume"])
+    names = serializers.ListField(child=serializers.CharField(), required=False, allow_null=True, max_length=500)
+
+
+class RunPatchSerializer(serializers.Serializer):
+    note = serializers.CharField(allow_null=True, allow_blank=True, max_length=500)
+
+
+class AuditQuerySerializer(serializers.Serializer):
+    action = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    user = serializers.IntegerField(required=False, min_value=1)
+    q = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    since = serializers.IntegerField(required=False, min_value=1, max_value=366)
+    page = serializers.IntegerField(min_value=1, default=1)
+    size = serializers.IntegerField(min_value=1, max_value=200, default=50)
+
+
+class DeliveriesQuerySerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=["pending", "sent", "failed"], required=False)
+    limit = serializers.IntegerField(min_value=1, max_value=200, default=50)

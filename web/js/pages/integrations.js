@@ -1,4 +1,3 @@
-// Integrações: notificações para Slack, Discord, Teams, Google Chat e webhooks, e gatilho por URL.
 import { api, can, get, post } from "../api.js";
 import { clear, confirmDialog, copyButton, dateTime, drawer, empty, h, icon, modal, relative, toast } from "../ui.js";
 
@@ -7,6 +6,8 @@ export const KINDS = {
   discord: { label: "Discord", ic: "chat", hint: "Webhook do canal (Integrações do servidor)", ph: "https://discord.com/api/webhooks/…" },
   teams: { label: "Microsoft Teams", ic: "team", hint: "Webhook de entrada ou fluxo do Workflows", ph: "https://….webhook.office.com/…" },
   google_chat: { label: "Google Chat", ic: "message", hint: "Webhook do espaço", ph: "https://chat.googleapis.com/v1/spaces/…" },
+  telegram: { label: "Telegram", ic: "send", hint: "Bot do BotFather num grupo ou canal", ph: "" },
+  email: { label: "E-mail", ic: "mail", hint: "Mensagem pelo servidor SMTP do .env", ph: "" },
   webhook: { label: "Webhook genérico", ic: "braces", hint: "POST em JSON assinado com HMAC-SHA256", ph: "https://seu-sistema.com/delco/eventos" },
   trigger: { label: "Gatilho por URL", ic: "bolt", hint: "Uma URL secreta que dispara um workflow", ph: "" },
 };
@@ -15,12 +16,14 @@ const EVENTS = {
   "run.succeeded": "Concluída",
   "run.failed": "Falhou",
   "run.cancelled": "Cancelada",
+  "run.recovered": "Voltou a funcionar",
 };
 const EVENT_LONG = {
   "run.started": "Execução começou",
   "run.succeeded": "Execução concluída",
   "run.failed": "Execução falhou",
   "run.cancelled": "Execução cancelada",
+  "run.recovered": "Voltou a funcionar (sucesso depois de falha)",
   test: "Teste",
 };
 
@@ -30,7 +33,7 @@ export function integrationsPage(main) {
   main.append(h("div", { class: "page" },
     h("div", { class: "page-head" },
       h("div", { class: "stack" }, h("h1", {}, "Integrações"),
-        h("p", { class: "muted" }, "Avise o time no Slack, Discord, Teams ou Google Chat quando uma execução muda de estado, envie eventos para outro sistema por webhook ou dispare workflows de fora por uma URL secreta.")),
+        h("p", { class: "muted" }, "Avise o time no Slack, Discord, Teams, Google Chat, Telegram ou por e-mail quando uma execução muda de estado, envie eventos para outro sistema por webhook ou dispare workflows de fora por uma URL secreta.")),
       admin ? h("button", { class: "btn accent", onclick: () => integrationDialog(null, load) }, icon("plus", 15), "Nova integração") : null),
     body));
 
@@ -71,8 +74,11 @@ export function integrationsPage(main) {
       },
     });
     const destination = i.kind === "trigger"
-      ? h("div", { class: "small" }, "Dispara ", h("a", { class: "mono strong", href: `#/workflows/${i.workflow}` }, i.workflow), h("div", { class: "tiny muted mono" }, `POST ${i.hook_path}`))
-      : h("div", { class: "tiny muted mono ellipsis", title: "O restante da URL fica oculto" }, i.url);
+      ? h("div", { class: "small" }, "Dispara ", h("a", { class: "mono strong", href: `#/workflows/${i.workflow}` }, i.workflow), h("div", { class: "tiny muted mono" }, `POST ${i.hook_path}`),
+        i.require_signature ? h("div", { class: "tiny muted row tight" }, icon("shield", 13), "Exige assinatura HMAC (X-Delco-Signature ou X-Hub-Signature-256)") : null)
+      : i.kind === "email" ? h("div", { class: "tiny muted ellipsis", title: (i.recipients || []).join(", ") }, `Para ${(i.recipients || []).join(", ")}`)
+        : i.kind === "telegram" ? h("div", { class: "tiny muted mono" }, `chat ${i.chat_id} · token do bot oculto`)
+          : h("div", { class: "tiny muted mono ellipsis", title: "O restante da URL fica oculto" }, i.url);
     const lastWord = i.last_status === "sent" ? (i.kind === "trigger" ? "chamada recebida" : "entregue") : i.last_status === "error" ? "falhou" : null;
     return h("article", { class: `integ${i.is_active ? "" : " off"}` },
       h("div", { class: "integ-head" },
@@ -113,26 +119,38 @@ export function integrationsPage(main) {
 function deliveriesDrawer(i) {
   drawer(async (panel, close) => {
     const list = h("div", {}, h("div", { class: "skeleton", style: { height: "240px" } }));
+    let filter = "";
+    const chips = h("div", { class: "chips" });
+    const paintChips = () => clear(chips, [["", "Todas"], ["failed", "Com falha"], ["pending", "Na fila"], ["sent", "Entregues"]].map(([v, l]) => h("button", { class: "chip", "aria-pressed": String(filter === v), onclick: () => { filter = v; paintChips(); load(); } }, l)));
     panel.append(
       h("div", { class: "drawer-head" }, h("div", { class: "stack sm grow" }, h("span", { class: "tiny muted" }, KINDS[i.kind].label), h("h2", {}, i.name)),
         h("button", { class: "icon-btn", "aria-label": "Fechar", onclick: close }, icon("close", 18))),
       h("div", { class: "drawer-body stack" },
-        h("p", { class: "small muted" }, "As 50 entregas mais recentes. Quando o destino recusa, o Delco tenta de novo até 5 vezes (10 s, 20 s, 40 s e 80 s depois)."),
+        h("p", { class: "small muted" }, "As 50 entregas mais recentes. Quando o destino recusa, o Delco tenta de novo até 5 vezes (10 s, 20 s, 40 s e 80 s depois). Entregas que desistiram podem ser reenviadas."),
+        chips,
         list));
-    try {
-      const rows = await get(`/integrations/${i.id}/deliveries`);
-      clear(list, rows.length ? h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", { class: "table" },
-        h("thead", {}, h("tr", {}, h("th", {}, "Evento"), h("th", {}, "Execução"), h("th", {}, "Resultado"), h("th", { class: "right" }, "Quando"))),
-        h("tbody", {}, rows.map((d) => h("tr", {},
-          h("td", { class: "small" }, EVENT_LONG[d.event] || d.event),
-          h("td", { class: "small" }, d.run_id ? h("a", { href: `#/runs/${d.run_id}`, onclick: close, class: "strong" }, `#${d.run_id}`) : "—", d.workflow ? h("div", { class: "tiny muted mono" }, d.workflow) : null),
-          h("td", {}, h("span", { class: `status-word ${d.status}` }, { sent: "Entregue", failed: "Falhou", pending: "Na fila" }[d.status]),
-            h("div", { class: "tiny muted" }, [d.response_code ? `HTTP ${d.response_code}` : null, `${d.attempts} tentativa(s)`, d.next_attempt_at ? `próxima ${relative(d.next_attempt_at)}` : null].filter(Boolean).join(" · ")),
-            d.error ? h("div", { class: "tiny", style: { color: "var(--danger)", maxWidth: "240px" }, title: d.error }, d.error.length > 80 ? `${d.error.slice(0, 79)}…` : d.error) : null),
-          h("td", { class: "right small muted nowrap", title: dateTime(d.created_at, true) }, relative(d.created_at)))))))) : empty("Nenhuma entrega ainda", "As mensagens aparecem aqui quando um evento escolhido acontecer. Use Enviar teste para conferir agora."));
-    } catch (ex) {
-      clear(list, h("div", { class: "notice error" }, ex.message));
+    async function load() {
+      try {
+        const rows = await get(`/integrations/${i.id}/deliveries${filter ? `?status=${filter}` : ""}`);
+        clear(list, rows.length ? h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", { class: "table" },
+          h("thead", {}, h("tr", {}, h("th", {}, "Evento"), h("th", {}, "Execução"), h("th", {}, "Resultado"), h("th", { class: "right" }, "Quando"))),
+          h("tbody", {}, rows.map((d) => h("tr", {},
+            h("td", { class: "small" }, EVENT_LONG[d.event] || d.event),
+            h("td", { class: "small" }, d.run_id ? h("a", { href: `#/runs/${d.run_id}`, onclick: close, class: "strong" }, `#${d.run_id}`) : "—", d.workflow ? h("div", { class: "tiny muted mono" }, d.workflow) : null),
+            h("td", {}, h("span", { class: `status-word ${d.status}` }, { sent: "Entregue", failed: "Falhou", pending: "Na fila" }[d.status]),
+              h("div", { class: "tiny muted" }, [d.response_code ? `HTTP ${d.response_code}` : null, `${d.attempts} tentativa(s)`, d.next_attempt_at ? `próxima ${relative(d.next_attempt_at)}` : null].filter(Boolean).join(" · ")),
+              d.error ? h("div", { class: "tiny", style: { color: "var(--danger)", maxWidth: "240px" }, title: d.error }, d.error.length > 80 ? `${d.error.slice(0, 79)}…` : d.error) : null,
+              can("admin") && d.status === "failed" ? h("button", { class: "btn ghost sm", style: { marginTop: "6px" }, onclick: async (e) => {
+                e.currentTarget.disabled = true;
+                try { await post(`/integrations/${i.id}/deliveries/${d.id}/retry`); toast("Entrega de volta à fila"); load(); } catch (ex) { toast(ex.message, "error"); }
+              } }, icon("retry", 13), "Reenviar") : null),
+            h("td", { class: "right small muted nowrap", title: dateTime(d.created_at, true) }, relative(d.created_at)))))))) : empty(filter ? "Nenhuma entrega com esse filtro" : "Nenhuma entrega ainda", filter ? null : "As mensagens aparecem aqui quando um evento escolhido acontecer. Use Enviar teste para conferir agora."));
+      } catch (ex) {
+        clear(list, h("div", { class: "notice error" }, ex.message));
+      }
     }
+    paintChips();
+    load();
   });
 }
 
@@ -142,7 +160,7 @@ function field(id, label, input, hint) {
 
 async function integrationDialog(current, onSaved) {
   let workflows = [];
-  try { workflows = (await get("/workflows")).filter((w) => w.is_active); } catch { /* segue sem a lista */ }
+  try { workflows = (await get("/workflows")).filter((w) => w.is_active); } catch {  }
   modal((box, close) => {
     let kind = current?.kind || "slack";
     const name = h("input", { class: "input", id: "name", maxlength: "120", value: current?.name || "", placeholder: "Ex.: Alertas do time de dados" });
@@ -156,6 +174,13 @@ async function integrationDialog(current, onSaved) {
       return { cb, el: h("label", { class: "check mono", style: { fontSize: "12.5px" } }, cb, w.name) };
     });
     const target = h("select", { class: "select", id: "workflow" }, workflows.map((w) => h("option", { value: w.name, selected: current?.workflow === w.name }, w.name)));
+    const signed = h("input", { type: "checkbox", id: "require_signature", checked: !!current?.require_signature });
+    const botToken = h("input", { class: "input", id: "token", type: "password", autocomplete: "off", placeholder: current ? "Deixe em branco para manter" : "123456789:AA…" });
+    const chatId = h("input", { class: "input", id: "chat_id", value: current?.chat_id || "", placeholder: "-1001234567890 ou @canal" });
+    const recipients = h("textarea", { class: "textarea", id: "recipients", rows: "2", style: { minHeight: "64px", fontFamily: "var(--font)" }, placeholder: "dados@empresa.com, ops@empresa.com" }, (current?.recipients || []).join(", "));
+    const eventsField = () => h("div", { class: "field" }, h("span", { class: "label" }, "Avisar quando"), h("div", { class: "checks" }, evs.map((x) => x.el)), h("span", { class: "field-error", "data-for": "events" }));
+    const scopeField = () => h("details", { open: !!current?.workflows?.length }, h("summary", { class: "small strong", style: { cursor: "pointer" } }, "Só alguns workflows (opcional)"),
+      h("div", { class: "stack sm", style: { marginTop: "10px" } }, h("span", { class: "hint" }, "Sem nenhum marcado, vale para todos."), h("div", { class: "checks" }, wfChecks.map((x) => x.el))));
     const kindPick = h("div", { class: "kind-pick", role: "group", "aria-label": "Tipo" });
     const dynamic = h("div", { class: "stack" });
     const errSlot = h("span", { class: "field-error", "data-for": "kind" });
@@ -167,7 +192,17 @@ async function integrationDialog(current, onSaved) {
       const k = KINDS[kind];
       url.placeholder = k.ph;
       if (kind === "trigger") {
-        clear(dynamic, field("workflow", "Workflow que a URL dispara", target, "A chamada aceita um JSON opcional: {\"params\": {...}, \"note\": \"...\"}. A URL aparece uma única vez, logo depois de criar."));
+        clear(dynamic, field("workflow", "Workflow que a URL dispara", target, "A chamada aceita um JSON opcional: {\"params\": {...}, \"note\": \"...\"}. A URL aparece uma única vez, logo depois de criar."),
+          h("label", { class: "check small" }, signed, "Exigir assinatura HMAC-SHA256 do corpo (compatível com webhooks do GitHub)"),
+          h("span", { class: "hint" }, "Com a assinatura ligada, o Delco mostra um segredo uma única vez; quem chama envia X-Delco-Signature: sha256=… (ou X-Hub-Signature-256)."));
+      } else if (kind === "telegram") {
+        clear(dynamic,
+          h("div", { class: "grid-2" }, field("token", "Token do bot", botToken, "Crie o bot com o @BotFather e adicione-o ao grupo."), field("chat_id", "Chat", chatId, "ID do grupo ou @canal público.")),
+          eventsField(), scopeField());
+      } else if (kind === "email") {
+        clear(dynamic,
+          field("recipients", "Destinatários", recipients, "Separe por vírgula. O envio usa o servidor SMTP configurado em DELCO_SMTP_HOST."),
+          eventsField(), scopeField());
       } else {
         clear(dynamic,
           field("url", current ? "Nova URL do webhook (deixe em branco para manter)" : "URL do webhook", url,
@@ -184,8 +219,19 @@ async function integrationDialog(current, onSaved) {
       form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
       const payload = { name: name.value };
       if (!current) payload.kind = kind;
-      if (kind === "trigger") payload.workflow = target.value;
-      else {
+      if (kind === "trigger") {
+        payload.workflow = target.value;
+        payload.require_signature = signed.checked;
+      } else if (kind === "telegram" || kind === "email") {
+        if (kind === "telegram") {
+          if (!current || botToken.value.trim()) payload.token = botToken.value.trim();
+          payload.chat_id = chatId.value.trim();
+        } else {
+          payload.recipients = recipients.value.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+        }
+        payload.events = evs.filter((x) => x.cb.checked).map((x) => x.e);
+        payload.workflows = wfChecks.filter((x) => x.cb.checked).map((x) => x.cb.value);
+      } else {
         if (!current || url.value.trim()) payload.url = url.value.trim();
         payload.events = evs.filter((x) => x.cb.checked).map((x) => x.e);
         payload.workflows = wfChecks.filter((x) => x.cb.checked).map((x) => x.cb.value);
@@ -197,6 +243,7 @@ async function integrationDialog(current, onSaved) {
         close();
         onSaved();
         if (r.hook_url) showHookUrl(r);
+        else if (r.signing_secret) showSecret(r);
       } catch (ex) {
         let shown = false;
         for (const [k, msg] of Object.entries(ex.fields || {})) {
@@ -220,14 +267,29 @@ async function integrationDialog(current, onSaved) {
   }, { wide: true });
 }
 
+function showSecret(r) {
+  modal((box, close) => {
+    box.append(
+      h("h2", {}, "Copie o segredo agora"),
+      h("p", { class: "muted small" }, "Ele assina as chamadas para este gatilho e não aparece de novo."),
+      h("div", { class: "copy-line", style: { marginTop: "16px" } }, h("code", {}, r.signing_secret), copyButton(r.signing_secret)),
+      h("div", { class: "actions" }, h("button", { class: "btn", onclick: close }, "Pronto")));
+  }, { wide: true });
+}
+
 function showHookUrl(r) {
-  const curl = `curl -X POST ${r.hook_url} \\\n  -H 'Content-Type: application/json' \\\n  -d '{"params": {}, "note": "Disparado pelo CI"}'`;
+  const body = '{"params": {}, "note": "Disparado pelo CI"}';
+  const curl = r.signing_secret
+    ? `BODY='${body}'\nSIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$DELCO_HOOK_SECRET" | cut -d' ' -f2)\ncurl -X POST ${r.hook_url} \\\n  -H 'Content-Type: application/json' \\\n  -H "X-Delco-Signature: sha256=$SIG" \\\n  -d "$BODY"`
+    : `curl -X POST ${r.hook_url} \\\n  -H 'Content-Type: application/json' \\\n  -d '${body}'`;
   modal((box, close) => {
     box.append(
       h("h2", {}, "Copie a URL agora"),
       h("p", { class: "muted small" }, `Ela dispara ${r.workflow} e não aparece de novo. Guarde num segredo do CI (por exemplo, DELCO_HOOK_URL).`),
       h("div", { class: "stack", style: { marginTop: "16px" } },
         h("div", { class: "copy-line" }, h("code", {}, r.hook_url), copyButton(r.hook_url)),
+        r.signing_secret ? h("span", { class: "small muted" }, "Segredo da assinatura (guarde como DELCO_HOOK_SECRET):") : null,
+        r.signing_secret ? h("div", { class: "copy-line" }, h("code", {}, r.signing_secret), copyButton(r.signing_secret)) : null,
         h("span", { class: "small muted" }, "Exemplo:"),
         h("pre", { class: "json" }, curl)),
       h("div", { class: "actions" }, h("button", { class: "btn", onclick: close }, "Pronto")));

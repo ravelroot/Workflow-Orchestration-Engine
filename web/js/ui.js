@@ -1,5 +1,3 @@
-// Utilitários de interface: criação de elementos, ícones, formatação e camadas.
-
 export function h(tag, attrs = {}, ...children) {
   const svgTags = new Set(["svg", "g", "path", "rect", "line", "text", "circle", "polyline", "defs", "marker", "title", "clipPath"]);
   const el = svgTags.has(tag) ? document.createElementNS("http://www.w3.org/2000/svg", tag) : document.createElement(tag);
@@ -74,6 +72,19 @@ const PATHS = {
   send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
   enter: '<path d="M20 5v7a3 3 0 0 1-3 3H5M9 11l-4 4 4 4"/>',
   arrows: '<path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/>',
+  system: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1.5V4M15 1.5V4M9 20v2.5M15 20v2.5M1.5 9H4M1.5 15H4M20 9h2.5M20 15h2.5"/>',
+  history: '<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4"/><path d="M12 8v4.5l3 1.5"/>',
+  code: '<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  skip: '<path d="M6 5l9 7-9 7zM18 5v14"/>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6 8.5-6"/>',
+  shield: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/>',
+  sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  wrap: '<path d="M4 6h16M4 12h13a3 3 0 0 1 0 6h-4M4 18h5M15 16l-2 2 2 2"/>',
+  pin: '<path d="M12 21v-6M7 4h10l-1.5 6 3 3H5.5l3-3z"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
 };
 
 export function icon(name, size = 18) {
@@ -83,7 +94,6 @@ export function icon(name, size = 18) {
   return span.firstChild;
 }
 
-// Marca do Delco: a grade de execuções (seis casas cheias, três por fazer). viewBox 64 x 64.
 export function markSvg(color = "#fff") {
   return (
     `<g fill="${color}"><rect x="2" y="2" width="16" height="16" rx="4"/><rect x="24" y="2" width="16" height="16" rx="4"/>` +
@@ -104,18 +114,24 @@ export function brand() {
   return h("a", { class: "brand", href: "#/" }, h("span", { class: "brand-mark" }, mark()), h("span", { class: "brand-name" }, "Delco"));
 }
 
-// ---------------------------------------------------------------- formatação
 const INT = new Intl.NumberFormat("pt-BR");
 export const int = (n) => INT.format(n || 0);
 export const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n)}%`);
 
+let zoneOpts = {};
+export function setDisplayZone(zone) {
+  zoneOpts = zone === "utc" ? { timeZone: "UTC" } : {};
+}
+export const zoneLabel = () => (zoneOpts.timeZone ? " (UTC)" : "");
 export function dateTime(iso, withSeconds = false) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", ...(withSeconds ? { second: "2-digit" } : {}),
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", ...(withSeconds ? { second: "2-digit" } : {}), ...zoneOpts,
   });
 }
-export const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—");
+export const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit", ...zoneOpts }) : "—");
+export const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", ...zoneOpts }) : "—");
+export const day = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", ...zoneOpts }) : "—");
 
 export function duration(ms) {
   if (ms === null || ms === undefined) return "—";
@@ -152,10 +168,10 @@ export const STATUS = {
   skipped: "Pulada",
   cancelled: "Cancelada",
 };
-export const TRIGGER = { schedule: "Agendada", manual: "Painel", api: "API", cli: "CLI", webhook: "Webhook" };
+export const TRIGGER = { schedule: "Agendada", manual: "Painel", api: "API", cli: "CLI", webhook: "Webhook", backfill: "Reprocessamento" };
 export const ROLE = { admin: "Administrador", operator: "Operador", viewer: "Leitura" };
 export const ATTEMPT = {
-  running: "Rodando", succeeded: "Sucesso", failed: "Falhou", timed_out: "Tempo esgotado", lost: "Worker caiu", cancelled: "Cancelada",
+  running: "Rodando", succeeded: "Sucesso", failed: "Falhou", timed_out: "Tempo esgotado", lost: "Worker caiu", cancelled: "Cancelada", skipped: "Pulada",
 };
 
 export function pill(status, label) {
@@ -168,7 +184,6 @@ export function progressBar(parts) {
   return h("div", { class: "bar" }, parts.filter((p) => p.value > 0).map((p) => h("span", { class: p.cls, style: { width: `${(100 * p.value) / total}%` } })));
 }
 
-// ---------------------------------------------------------------- camadas
 let toastHost;
 export function toast(message, kind = "ok") {
   toastHost ??= document.body.appendChild(h("div", { class: "toasts", role: "status", "aria-live": "polite" }));
@@ -288,4 +303,68 @@ export function rateClass(rate) {
 
 export function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+export function selection(onChange) {
+  const ids = new Set();
+  const api = {
+    ids,
+    has: (id) => ids.has(id),
+    toggle(id, on) {
+      if (on ?? !ids.has(id)) ids.add(id);
+      else ids.delete(id);
+      onChange?.();
+    },
+    clear() {
+      ids.clear();
+      onChange?.();
+    },
+    setAll(list, on) {
+      list.forEach((id) => (on ? ids.add(id) : ids.delete(id)));
+      onChange?.();
+    },
+    box(id, label) {
+      return h("input", { type: "checkbox", class: "row-check", "aria-label": label, checked: ids.has(id),
+        onclick: (e) => e.stopPropagation(), onchange: (e) => api.toggle(id, e.target.checked) });
+    },
+    headBox(list, label = "Selecionar todos") {
+      const all = list.length > 0 && list.every((id) => ids.has(id));
+      const el = h("input", { type: "checkbox", class: "row-check", "aria-label": label, checked: all,
+        onchange: (e) => api.setAll(list, e.target.checked) });
+      el.indeterminate = !all && list.some((id) => ids.has(id));
+      return el;
+    },
+  };
+  return api;
+}
+
+export function bulkBar(count, actions, onClear) {
+  if (!count) return null;
+  return h("div", { class: "bulk-bar", role: "region", "aria-label": "Ações em lote" },
+    h("strong", {}, `${count} selecionada(s)`),
+    h("div", { class: "row tight wrap" }, actions),
+    h("span", { class: "spacer" }),
+    h("button", { class: "btn quiet sm", onclick: onClear }, "Limpar seleção"));
+}
+
+const PY_KW = new Set("and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield None True False".split(" "));
+export function highlightPython(line) {
+  const out = [];
+  const re = /("""|\'\'\'|"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|#.*$|@[A-Za-z_][\w.]*|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b)/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(line))) {
+    if (m.index > last) out.push(line.slice(last, m.index));
+    const tok = m[0];
+    let cls = null;
+    if (tok.startsWith("#")) cls = "tok-c";
+    else if (tok.startsWith("@")) cls = "tok-d";
+    else if (tok[0] === '"' || tok[0] === "'") cls = "tok-s";
+    else if (/^\d/.test(tok)) cls = "tok-n";
+    else if (PY_KW.has(tok)) cls = "tok-k";
+    out.push(cls ? h("span", { class: cls }, tok) : tok);
+    last = m.index + tok.length;
+  }
+  if (last < line.length) out.push(line.slice(last));
+  return out;
 }

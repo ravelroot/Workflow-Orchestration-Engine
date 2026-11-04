@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="948pt" height="352pt"
+ viewBox="0.00 0.00 947.80 351.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 337.4)">
+<title>arq</title>
+<g id="node1" class="node">
+<title>dev</title>
+<path fill="#fdfbfa" stroke="#d6cbc5" stroke-width="1.4" d="M65,-288C65,-288 12,-288 12,-288 6,-288 0,-282 0,-276 0,-276 0,-264 0,-264 0,-258 6,-252 12,-252 12,-252 65,-252 65,-252 71,-252 77,-258 77,-264 77,-264 77,-276 77,-276 77,-282 71,-288 65,-288"/>
+<text text-anchor="middle" x="38.5" y="-273" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Arquivos .py</text>
+<text text-anchor="middle" x="38.5" y="-262" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">workflows/</text>
+</g>
+<g id="node2" class="node">
+<title>sch</title>
+<path fill="#fdfbfa" stroke="#1f292f" stroke-width="1.4" d="M242,-288C242,-288 173,-288 173,-288 167,-288 161,-282 161,-276 161,-276 161,-264 161,-264 161,-258 167,-252 173,-252 173,-252 242,-252 242,-252 248,-252 254,-258 254,-264 254,-264 254,-276 254,-276 254,-282 248,-288 242,-288"/>
+<text text-anchor="middle" x="207.5" y="-273" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Agendador</text>
+<text text-anchor="middle" x="207.5" y="-262" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">delco scheduler</text>
+</g>
+<g id="edge1" class="edge">
+<title>dev&#45;&gt;sch</title>
+<path fill="none" stroke="#8a9eab" d="M77.39,-270C99.91,-270 128.79,-270 153.53,-270"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="153.73,-272.45 160.73,-270 153.73,-267.55 153.73,-272.45"/>
+<text text-anchor="middle" x="119" y="-272.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">a cada 30 s</text>
+</g>
+<g id="node3" class="node">
+<title>db</title>
+<path fill="#fdfbfa" stroke="#4c6170" stroke-width="1.4" d="M919,-254.98C919,-257.06 896.59,-258.75 869,-258.75 841.41,-258.75 819,-257.06 819,-254.98 819,-254.98 819,-221.02 819,-221.02 819,-218.94 841.41,-217.25 869,-217.25 896.59,-217.25 919,-218.94 919,-221.02 919,-221.02 919,-254.98 919,-254.98"/>
+<path fill="none" stroke="#4c6170" stroke-width="1.4" d="M919,-254.98C919,-252.9 896.59,-251.21 869,-251.21 841.41,-251.21 819,-252.9 819,-254.98"/>
+<text text-anchor="middle" x="869" y="-241" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">MySQL</text>
+<text text-anchor="middle" x="869" y="-230" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">fonte da verdade</text>
+</g>
+<g id="edge2" class="edge">
+<title>sch&#45;&gt;db</title>
+<path fill="none" stroke="#8a9eab" d="M254.02,-284.16C279.59,-291.38 312.26,-299.38 342,-303 387.99,-308.6 660.81,-305.4 710,-300 751.07,-295.5 762.76,-296.64 801,-281 812.55,-276.28 824.29,-269.54 834.64,-262.79"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="836.11,-264.76 840.57,-258.83 833.38,-260.68 836.11,-264.76"/>
+<text text-anchor="middle" x="524.5" y="-316.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">execuções e</text>
+<text text-anchor="middle" x="524.5" y="-307.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">tarefas</text>
+</g>
+<g id="node4" class="node">
+<title>rs</title>
+<path fill="#fdfbfa" stroke="#4c6170" stroke-width="1.4" d="M455,-286.98C455,-289.06 433.71,-290.75 407.5,-290.75 381.29,-290.75 360,-289.06 360,-286.98 360,-286.98 360,-253.02 360,-253.02 360,-250.94 381.29,-249.25 407.5,-249.25 433.71,-249.25 455,-250.94 455,-253.02 455,-253.02 455,-286.98 455,-286.98"/>
+<path fill="none" stroke="#4c6170" stroke-width="1.4" d="M455,-286.98C455,-284.9 433.71,-283.21 407.5,-283.21 381.29,-283.21 360,-284.9 360,-286.98"/>
+<text text-anchor="middle" x="407.5" y="-273" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Redis Streams</text>
+<text text-anchor="middle" x="407.5" y="-262" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">pub/sub e sinais</text>
+</g>
+<g id="edge3" class="edge">
+<title>sch&#45;&gt;rs</title>
+<path fill="none" stroke="#8a9eab" d="M254.42,-270C283.72,-270 321.82,-270 352.55,-270"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="352.8,-272.45 359.8,-270 352.8,-267.55 352.8,-272.45"/>
+<text text-anchor="middle" x="298" y="-272.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">XADD e sinal</text>
+</g>
+<g id="node11" class="node">
+<title>nt</title>
+<path fill="#fdfbfa" stroke="#d6cbc5" stroke-width="1.4" d="M461,-224.5C461,-224.5 354,-224.5 354,-224.5 348,-224.5 342,-218.5 342,-212.5 342,-212.5 342,-195.5 342,-195.5 342,-189.5 348,-183.5 354,-183.5 354,-183.5 461,-183.5 461,-183.5 467,-183.5 473,-189.5 473,-195.5 473,-195.5 473,-212.5 473,-212.5 473,-218.5 467,-224.5 461,-224.5"/>
+<text text-anchor="middle" x="407.5" y="-212.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Slack · Discord · Teams</text>
+<text text-anchor="middle" x="407.5" y="-201.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Google Chat · Telegram</text>
+<text text-anchor="middle" x="407.5" y="-190.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">e&#45;mail · webhook</text>
+</g>
+<g id="edge14" class="edge">
+<title>sch&#45;&gt;nt</title>
+<path fill="none" stroke="#8a9eab" d="M254.42,-254.69C279.17,-246.44 310.2,-236.1 337.77,-226.91"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="338.83,-229.14 344.7,-224.6 337.28,-224.49 338.83,-229.14"/>
+<text text-anchor="middle" x="298" y="-250.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">avisos</text>
+</g>
+<g id="node5" class="node">
+<title>w1</title>
+<path fill="#fdfbfa" stroke="#1f292f" stroke-width="1.4" d="M659,-287C659,-287 627,-287 627,-287 621,-287 615,-281 615,-275 615,-275 615,-263 615,-263 615,-257 621,-251 627,-251 627,-251 659,-251 659,-251 665,-251 671,-257 671,-263 671,-263 671,-275 671,-275 671,-281 665,-287 659,-287"/>
+<text text-anchor="middle" x="643" y="-272" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Worker</text>
+<text text-anchor="middle" x="643" y="-261" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">N vagas</text>
+</g>
+<g id="edge4" class="edge">
+<title>rs&#45;&gt;w1</title>
+<path fill="none" stroke="#8a9eab" d="M455.19,-269.8C500.17,-269.61 567.16,-269.32 607.51,-269.15"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="607.74,-271.6 614.72,-269.12 607.71,-266.7 607.74,-271.6"/>
+<text text-anchor="middle" x="524.5" y="-271.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">XREADGROUP</text>
+</g>
+<g id="node6" class="node">
+<title>w2</title>
+<path fill="#fdfbfa" stroke="#1f292f" stroke-width="1.4" d="M659,-226C659,-226 627,-226 627,-226 621,-226 615,-220 615,-214 615,-214 615,-202 615,-202 615,-196 621,-190 627,-190 627,-190 659,-190 659,-190 665,-190 671,-196 671,-202 671,-202 671,-214 671,-214 671,-220 665,-226 659,-226"/>
+<text text-anchor="middle" x="643" y="-211" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Worker</text>
+<text text-anchor="middle" x="643" y="-200" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">N vagas</text>
+</g>
+<g id="edge5" class="edge">
+<title>rs&#45;&gt;w2</title>
+<path fill="none" stroke="#8a9eab" d="M455.06,-255.41C466.76,-251.88 479.31,-248.2 491,-245 530.89,-234.08 577.12,-222.98 607.81,-215.82"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="608.62,-218.15 614.88,-214.18 607.51,-213.38 608.62,-218.15"/>
+</g>
+<g id="node7" class="node">
+<title>api</title>
+<path fill="#fdfbfa" stroke="#1f292f" stroke-width="1.4" d="M698,-158C698,-158 588,-158 588,-158 582,-158 576,-152 576,-146 576,-146 576,-134 576,-134 576,-128 582,-122 588,-122 588,-122 698,-122 698,-122 704,-122 710,-128 710,-134 710,-134 710,-146 710,-146 710,-152 704,-158 698,-158"/>
+<text text-anchor="middle" x="643" y="-143" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">API + painel</text>
+<text text-anchor="middle" x="643" y="-132" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Django · DRF · Channels</text>
+</g>
+<g id="edge9" class="edge">
+<title>rs&#45;&gt;api</title>
+<path fill="none" stroke="#8a9eab" d="M453.29,-250.63C460.25,-246.64 467.09,-242.08 473,-237 483.38,-228.08 480.49,-220.78 491,-212 517.53,-189.84 552.02,-172.73 581.34,-160.76"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="582.31,-163.01 587.9,-158.13 580.49,-158.46 582.31,-163.01"/>
+<text text-anchor="middle" x="524.5" y="-214.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">pub/sub</text>
+</g>
+<g id="edge6" class="edge">
+<title>w1&#45;&gt;db</title>
+<path fill="none" stroke="#8a9eab" d="M671.02,-265.26C705.7,-260.46 766.76,-252.01 811.73,-245.79"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="812.2,-248.2 818.8,-244.81 811.53,-243.34 812.2,-248.2"/>
+<text text-anchor="middle" x="764.5" y="-268.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">posse, heartbeat,</text>
+<text text-anchor="middle" x="764.5" y="-259.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">resultado e logs</text>
+</g>
+<g id="edge8" class="edge">
+<title>w1&#45;&gt;rs</title>
+<path fill="none" stroke="#8a9eab" d="M614.93,-262.91C598.54,-259.54 577.18,-255.7 558,-254 528.34,-251.37 520.64,-251.15 491,-254 481.74,-254.89 471.98,-256.33 462.54,-257.99"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="461.84,-255.62 455.39,-259.29 462.72,-260.44 461.84,-255.62"/>
+<text text-anchor="middle" x="524.5" y="-256.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">eventos</text>
+</g>
+<g id="edge7" class="edge">
+<title>w2&#45;&gt;db</title>
+<path fill="none" stroke="#8a9eab" d="M671.23,-211.64C702.54,-215.82 755.48,-222.9 801,-229 804.54,-229.48 808.19,-229.96 811.87,-230.46"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="811.7,-232.91 818.97,-231.41 812.36,-228.05 811.7,-232.91"/>
+</g>
+<g id="edge11" class="edge">
+<title>api&#45;&gt;db</title>
+<path fill="none" stroke="#8a9eab" d="M685.35,-158.09C722.39,-174.3 776.87,-198.13 816.68,-215.55"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="816.05,-217.94 823.44,-218.51 818.01,-213.45 816.05,-217.94"/>
+</g>
+<g id="node8" class="node">
+<title>ui</title>
+<path fill="#fdfbfa" stroke="#d6cbc5" stroke-width="1.4" d="M892,-158C892,-158 846,-158 846,-158 840,-158 834,-152 834,-146 834,-146 834,-134 834,-134 834,-128 840,-122 846,-122 846,-122 892,-122 892,-122 898,-122 904,-128 904,-134 904,-134 904,-146 904,-146 904,-152 898,-158 892,-158"/>
+<text text-anchor="middle" x="869" y="-137.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Navegador</text>
+</g>
+<g id="edge10" class="edge">
+<title>api&#45;&gt;ui</title>
+<path fill="none" stroke="#8a9eab" d="M710.3,-140C748.08,-140 794.23,-140 826.82,-140"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="826.97,-142.45 833.97,-140 826.97,-137.55 826.97,-142.45"/>
+<text text-anchor="middle" x="764.5" y="-142.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">WebSocket</text>
+</g>
+<g id="node9" class="node">
+<title>cli</title>
+<path fill="#fdfbfa" stroke="#d6cbc5" stroke-width="1.4" d="M426,-158C426,-158 389,-158 389,-158 383,-158 377,-152 377,-146 377,-146 377,-134 377,-134 377,-128 383,-122 389,-122 389,-122 426,-122 426,-122 432,-122 438,-128 438,-134 438,-134 438,-146 438,-146 438,-152 432,-158 426,-158"/>
+<text text-anchor="middle" x="407.5" y="-137.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">CLI delco</text>
+</g>
+<g id="edge12" class="edge">
+<title>cli&#45;&gt;api</title>
+<path fill="none" stroke="#8a9eab" d="M438.07,-140C470.81,-140 524.78,-140 568.98,-140"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="568.98,-142.45 575.98,-140 568.98,-137.55 568.98,-142.45"/>
+<text text-anchor="middle" x="524.5" y="-142.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">HTTP</text>
+</g>
+<g id="node10" class="node">
+<title>ci</title>
+<path fill="#fdfbfa" stroke="#d6cbc5" stroke-width="1.4" d="M430,-97C430,-97 385,-97 385,-97 379,-97 373,-91 373,-85 373,-85 373,-73 373,-73 373,-67 379,-61 385,-61 385,-61 430,-61 430,-61 436,-61 442,-67 442,-73 442,-73 442,-85 442,-85 442,-91 436,-97 430,-97"/>
+<text text-anchor="middle" x="407.5" y="-82" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">CI e outros</text>
+<text text-anchor="middle" x="407.5" y="-71" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">sistemas</text>
+</g>
+<g id="edge13" class="edge">
+<title>ci&#45;&gt;api</title>
+<path fill="none" stroke="#8a9eab" d="M442.45,-87.87C475.4,-96.48 526.48,-109.82 568.71,-120.85"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="568.28,-123.27 575.67,-122.67 569.52,-118.53 568.28,-123.27"/>
+<text text-anchor="middle" x="524.5" y="-118.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">POST /api/hooks</text>
+</g>
+<g id="node12" class="node">
+<title>pr</title>
+<path fill="#fdfbfa" stroke="#d6cbc5" stroke-width="1.4" d="M433,-36C433,-36 382,-36 382,-36 376,-36 370,-30 370,-24 370,-24 370,-12 370,-12 370,-6 376,0 382,0 382,0 433,0 433,0 439,0 445,-6 445,-12 445,-12 445,-24 445,-24 445,-30 439,-36 433,-36"/>
+<text text-anchor="middle" x="407.5" y="-15.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#1f292f">Prometheus</text>
+</g>
+<g id="edge15" class="edge">
+<title>pr&#45;&gt;api</title>
+<path fill="none" stroke="#8a9eab" d="M445.1,-33.3C475.77,-46.49 520.45,-66.6 558,-87 575.39,-96.45 594.07,-108.08 609.39,-118.03"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="608.1,-120.12 615.3,-121.9 610.78,-116.02 608.1,-120.12"/>
+<text text-anchor="middle" x="524.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">/api/metrics</text>
+</g>
+</g>
+</svg>

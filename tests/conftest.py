@@ -1,10 +1,3 @@
-"""Infraestrutura dos testes: Django com MySQL e Redis reais (veja o README para subir os dois).
-
-Os workers dos testes rodam em threads e processos de verdade, então cada teste
-grava no banco de fato (sem transação de teste). Antes de cada teste as tabelas
-são esvaziadas com TRUNCATE e o Redis com FLUSHDB.
-"""
-
 from __future__ import annotations
 
 import os
@@ -31,18 +24,18 @@ os.environ["DELCO_WORKER_GRACE_SECONDS"] = "3"
 os.environ["DELCO_ENVIRONMENT"] = "test"
 os.environ["DJANGO_SETTINGS_MODULE"] = "delco.settings"
 
-from delco.db import setup  # noqa: E402
+from delco.db import setup
 
 setup()
 
-from django.db import connection  # noqa: E402
+from django.db import connection
 
-from delco.bus import Bus  # noqa: E402
-from delco.config import get_settings  # noqa: E402
-from delco.db import migrate, release  # noqa: E402
-from delco.models import TaskInstance, WorkflowRun  # noqa: E402
-from delco.scheduler import Scheduler  # noqa: E402
-from delco.worker import Worker  # noqa: E402
+from delco.bus import Bus
+from delco.config import get_settings
+from delco.db import migrate, release
+from delco.models import TaskInstance, WorkflowRun
+from delco.scheduler import Scheduler
+from delco.worker import Worker
 
 TABLES = (
     "integration_deliveries",
@@ -61,13 +54,10 @@ TABLES = (
 
 
 class SQL:
-    """Acesso direto ao MySQL para montar cenários (ex.: lease vencido) e conferir o estado."""
-
     def fetchall(self, sql: str, params: Any = None) -> list[dict[str, Any]]:
         with connection.cursor() as cur:
             cur.execute(sql, params)
             cols = [c[0] for c in cur.description]
-            # O MySQL devolve DATETIME sem fuso; a sessão está em UTC (init_command), então marca UTC.
             return [
                 {
                     c: v.replace(tzinfo=UTC) if isinstance(v, datetime) and v.tzinfo is None else v

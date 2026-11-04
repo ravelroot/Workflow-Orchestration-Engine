@@ -1,10 +1,3 @@
-"""Redis: filas (Streams com grupo de consumidores), eventos (pub/sub) e sinal de despertar.
-
-O Redis é só transporte. Se uma mensagem se perder, o agendador percebe pelo
-MySQL e a publica de novo; se chegar repetida, o worker a descarta porque
-a troca de estado no banco é condicional.
-"""
-
 from __future__ import annotations
 
 import json
@@ -21,6 +14,9 @@ GROUP = "workers"
 EVENTS_CHANNEL = "delco:events"
 WAKE_KEY = "delco:wake"
 LOAD_ERRORS_KEY = "delco:load-errors"
+PAUSED_WORKERS_KEY = "delco:workers:paused"
+SCHEDULER_PREFIX = "delco:scheduler:"
+RATE_PREFIX = "delco:rate:"
 STREAM_MAXLEN = 200_000
 
 
@@ -34,7 +30,6 @@ class Bus:
         self.redis = redis.Redis.from_url(url, decode_responses=True, health_check_interval=30)
         self._groups: set[str] = set()
 
-    # ------------------------------------------------------------------ filas
     def ensure_group(self, queue: str, *, force: bool = False) -> None:
         key = stream_key(queue)
         if key in self._groups and not force:
@@ -57,7 +52,7 @@ class Bus:
         try:
             reply = self.redis.xreadgroup(GROUP, consumer, streams, count=count, block=block_ms)
         except redis.ResponseError as exc:
-            if "NOGROUP" in str(exc):  # o Redis foi limpo: recria os grupos
+            if "NOGROUP" in str(exc):
                 for q in queues:
                     self.ensure_group(q, force=True)
                 return []
@@ -67,7 +62,6 @@ class Bus:
     def autoclaim(
         self, consumer: str, queue: str, min_idle_ms: int, count: int = 20
     ) -> list[tuple[str, str, int]]:
-        """Assume mensagens entregues a um consumidor que morreu antes de confirmar."""
         try:
             reply = self.redis.xautoclaim(stream_key(queue), GROUP, consumer, min_idle_ms, "0-0", count=count)
         except redis.ResponseError as exc:
@@ -115,11 +109,10 @@ class Bus:
             )
         return stats
 
-    # ---------------------------------------------------------------- eventos
     def publish(self, kind: str, **data: Any) -> None:
         try:
             self.redis.publish(EVENTS_CHANNEL, json.dumps({"type": kind, **data}, default=str))
-        except redis.RedisError as exc:  # eventos são best-effort: nunca derrubam o fluxo
+        except redis.RedisError as exc:
             log.warning("Falha ao publicar evento %s: %s", kind, exc)
 
     def wake(self) -> None:
@@ -150,6 +143,73 @@ class Bus:
         except (redis.RedisError, ValueError):
             return {}
 
+    def pause_worker(self, worker_id: str) -> None:
+        self.redis.sadd(PAUSED_WORKERS_KEY, worker_id)
+
+    def resume_worker(self, worker_id: str) -> None:
+        self.redis.srem(PAUSED_WORKERS_KEY, worker_id)
+
+    def is_worker_paused(self, worker_id: str) -> bool:
+        return bool(self.redis.sismember(PAUSED_WORKERS_KEY, worker_id))
+
+    def paused_workers(self) -> set[str]:
+        try:
+            return set(self.redis.smembers(PAUSED_WORKERS_KEY))
+        except redis.RedisError:
+            return set()
+
+    def scheduler_beat(self, info: dict[str, Any], ttl: int = 30) -> None:
+        try:
+            self.redis.set(SCHEDULER_PREFIX + info["id"], json.dumps(info, default=str), ex=ttl)
+        except redis.RedisError as exc:
+            log.warning("Falha ao registrar o sinal do agendador: %s", exc)
+
+    def scheduler_gone(self, scheduler_id: str) -> None:
+        try:
+            self.redis.delete(SCHEDULER_PREFIX + scheduler_id)
+        except redis.RedisError:
+            pass
+
+    def schedulers(self) -> list[dict[str, Any]]:
+        out = []
+        try:
+            keys = sorted(self.redis.scan_iter(match=SCHEDULER_PREFIX + "*", count=100))
+            for raw in self.redis.mget(keys) if keys else []:
+                if raw:
+                    try:
+                        out.append(json.loads(raw))
+                    except ValueError:
+                        continue
+        except redis.RedisError:
+            return []
+        return out
+
+    def hit(self, key: str, limit: int, window: int = 60) -> bool:
+        if limit <= 0:
+            return True
+        full = RATE_PREFIX + key
+        try:
+            pipe = self.redis.pipeline(transaction=True)
+            pipe.incr(full)
+            pipe.expire(full, window, nx=True)
+            count = pipe.execute()[0]
+        except redis.RedisError:
+            return True
+        return int(count) <= limit
+
+    def server_info(self) -> dict[str, Any]:
+        try:
+            info = self.redis.info()
+        except redis.RedisError:
+            return {}
+        return {
+            "version": info.get("redis_version"),
+            "used_memory": info.get("used_memory_human"),
+            "aof_enabled": bool(info.get("aof_enabled")),
+            "uptime_seconds": info.get("uptime_in_seconds"),
+            "connected_clients": info.get("connected_clients"),
+        }
+
     def ping(self) -> bool:
         try:
             return bool(self.redis.ping())
@@ -165,7 +225,6 @@ _bus_lock = threading.Lock()
 
 
 def get_bus() -> Bus:
-    """Conexão compartilhada do processo (usada pelas views da API)."""
     global _bus
     with _bus_lock:
         if _bus is None:

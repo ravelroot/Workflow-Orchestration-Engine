@@ -1,20 +1,16 @@
-"""Integrações: notificações de saída (Slack, Discord, Teams, Google Chat, webhook) e gatilho por URL.
-
-As notificações nascem como linhas em ``integration_deliveries`` na MESMA
-transação que muda o estado da execução, então nenhuma se perde se o processo
-cair logo depois. O agendador envia as pendentes fora da transação, com até
-``MAX_ATTEMPTS`` tentativas e espera exponencial. O gatilho por URL guarda só
-o SHA-256 do token, como os tokens pessoais.
-"""
-
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
 import logging
+import re
 import secrets
+import smtplib
+import ssl
 from datetime import timedelta
+from email.message import EmailMessage
+from html import escape
 from typing import Any
 from urllib.parse import urlparse
 
@@ -34,29 +30,38 @@ EVENTS = {
     "run.succeeded": "Execução concluída",
     "run.failed": "Execução falhou",
     "run.cancelled": "Execução cancelada",
+    "run.recovered": "Execução voltou a funcionar",
 }
-OUTBOUND = ("slack", "discord", "teams", "google_chat", "webhook")
+URL_KINDS = ("slack", "discord", "teams", "google_chat", "webhook")
+OUTBOUND = (*URL_KINDS, "telegram", "email")
 MAX_ATTEMPTS = 5
 BASE_DELAY = 10.0
 CLAIM_SECONDS = 120
 TOKEN_PREFIX = "dlh_"
-_EMOJI = {"run.started": "▶️", "run.succeeded": "✅", "run.failed": "❌", "run.cancelled": "⏹️", "test": "🔔"}
+MAX_RECIPIENTS = 20
+EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
+TELEGRAM_TOKEN_RE = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{20,}$")
+_EMOJI = {
+    "run.started": "▶️",
+    "run.succeeded": "✅",
+    "run.failed": "❌",
+    "run.cancelled": "⏹️",
+    "run.recovered": "💚",
+    "test": "🔔",
+}
 
 
 class IntegrationError(ValueError):
-    """Dados inválidos para uma integração (vira 422 na API)."""
-
     def __init__(self, fields: dict[str, str]) -> None:
         super().__init__("; ".join(fields.values()))
         self.fields = fields
 
 
-# ------------------------------------------------------------------ validação
 def validate(data: dict[str, Any], *, current: Integration | None = None) -> dict[str, Any]:
-    """Confere e normaliza os campos de criação/edição. Devolve só o que pode ser gravado."""
     errors: dict[str, str] = {}
     kind = current.kind if current else data.get("kind")
     out: dict[str, Any] = {}
+    config = dict(current.config or {}) if current else {}
     if not current:
         if kind not in IntegrationKind.values:
             errors["kind"] = "Escolha um tipo de integração válido."
@@ -68,7 +73,7 @@ def validate(data: dict[str, Any], *, current: Integration | None = None) -> dic
         elif len(name) > 120:
             errors["name"] = "Use no máximo 120 caracteres."
         out["name"] = name
-    if kind in OUTBOUND and ("url" in data or not current):
+    if kind in URL_KINDS and ("url" in data or not current):
         url = (data.get("url") or "").strip()
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -76,6 +81,32 @@ def validate(data: dict[str, Any], *, current: Integration | None = None) -> dic
         elif len(url) > 1000:
             errors["url"] = "A URL passa de 1000 caracteres."
         out["url"] = url
+    if kind == "telegram":
+        if "token" in data or not current:
+            token = (data.get("token") or "").strip()
+            if not TELEGRAM_TOKEN_RE.match(token):
+                errors["token"] = "Cole o token do bot como o BotFather mostra, no formato 123456:ABC…"
+            out["secret"] = token
+        if "chat_id" in data or not current:
+            chat = str(data.get("chat_id") or "").strip()
+            if not re.match(r"^(-?\d{3,20}|@[A-Za-z0-9_]{5,64})$", chat):
+                errors["chat_id"] = "Informe o ID do chat (como -1001234567890) ou o @canal."
+            config["chat_id"] = chat
+    if kind == "email":
+        if not get_settings().smtp_enabled:
+            errors["kind"] = "Configure o servidor de e-mail (DELCO_SMTP_HOST) antes de criar avisos por e-mail."
+        if "recipients" in data or not current:
+            raw = data.get("recipients") or []
+            if isinstance(raw, str):
+                raw = re.split(r"[,;\s]+", raw)
+            recipients = sorted({str(r).strip().lower() for r in raw if str(r).strip()})
+            if not recipients:
+                errors["recipients"] = "Informe pelo menos um e-mail."
+            elif len(recipients) > MAX_RECIPIENTS:
+                errors["recipients"] = f"Use no máximo {MAX_RECIPIENTS} destinatários."
+            elif bad := [r for r in recipients if not EMAIL_RE.match(r) or len(r) > 200]:
+                errors["recipients"] = f"E-mail inválido: {bad[0]}"
+            config["to"] = recipients
     if kind in OUTBOUND and ("events" in data or not current):
         events = data.get("events") or []
         if not isinstance(events, list) or not events or any(e not in EVENTS for e in events):
@@ -96,10 +127,14 @@ def validate(data: dict[str, Any], *, current: Integration | None = None) -> dic
             errors["workflow"] = "Escolha o workflow que a URL vai disparar."
         else:
             out["workflow_id"] = wf.id
+    if kind == "trigger" and data.get("require_signature") is not None:
+        config["require_signature"] = bool(data["require_signature"])
     if "is_active" in data and data["is_active"] is not None:
         out["is_active"] = bool(data["is_active"])
     if errors:
         raise IntegrationError(errors)
+    if config != (dict(current.config or {}) if current else {}):
+        out["config"] = config
     return out
 
 
@@ -107,12 +142,11 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create(data: dict[str, Any], *, user_id: int | None) -> tuple[Integration, str | None]:
-    """Cria a integração. Para o gatilho por URL, devolve também o token (aparece uma vez só)."""
+def create(data: dict[str, Any], *, user_id: int | None) -> tuple[Integration, dict[str, str]]:
     from .store import audit
 
     fields = validate(data)
-    token = None
+    extras: dict[str, str] = {}
     with transaction.atomic():
         integ = Integration(**fields, created_by_id=user_id)
         if integ.kind == "webhook":
@@ -122,22 +156,44 @@ def create(data: dict[str, Any], *, user_id: int | None) -> tuple[Integration, s
             integ.token_hash = hash_token(token)
             integ.token_prefix = token[:10]
             integ.events = []
+            extras["token"] = token
+            if (integ.config or {}).get("require_signature"):
+                integ.secret = secrets.token_hex(24)
+                extras["signing_secret"] = integ.secret
         integ.save()
         audit(user_id, "integration.create", f"integration:{integ.id}", {"kind": integ.kind, "name": integ.name})
-    return integ, token
+    return integ, extras
 
 
-def update(integ: Integration, data: dict[str, Any], *, user_id: int | None) -> Integration:
+def update(integ: Integration, data: dict[str, Any], *, user_id: int | None) -> tuple[Integration, dict[str, str]]:
     from .store import audit
 
     fields = validate(data, current=integ)
+    extras: dict[str, str] = {}
+    if integ.kind == "trigger" and "config" in fields:
+        wants = fields["config"].get("require_signature")
+        had = bool((integ.config or {}).get("require_signature"))
+        if wants and not had:
+            fields["secret"] = secrets.token_hex(24)
+            extras["signing_secret"] = fields["secret"]
+        elif not wants and had:
+            fields["secret"] = None
+    if data.get("rotate_secret") and integ.kind in ("webhook", "trigger"):
+        if integ.kind == "webhook" or (fields.get("config") or integ.config or {}).get("require_signature"):
+            fields["secret"] = secrets.token_hex(24)
+            extras["signing_secret"] = fields["secret"]
     if not fields:
-        return integ
+        return integ, extras
     with transaction.atomic():
         Integration.objects.filter(pk=integ.pk).update(**fields, updated_at=Now())
-        audit(user_id, "integration.update", f"integration:{integ.id}", {k: v for k, v in fields.items() if k != "url"})
+        audit(
+            user_id,
+            "integration.update",
+            f"integration:{integ.id}",
+            {k: v for k, v in fields.items() if k not in ("url", "secret")},
+        )
     integ.refresh_from_db()
-    return integ
+    return integ, extras
 
 
 def delete(integ: Integration, *, user_id: int | None) -> None:
@@ -158,13 +214,23 @@ def resolve_token(token: str) -> Integration | None:
     )
 
 
-# ------------------------------------------------------------------- eventos
+def signature_ok(integ: Integration, body: bytes, headers: dict[str, str]) -> bool:
+    if not (integ.config or {}).get("require_signature"):
+        return True
+    if not integ.secret:
+        return False
+    given = headers.get("x-delco-signature") or headers.get("x-hub-signature-256") or ""
+    expected = "sha256=" + hmac.new(integ.secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(given.strip().lower(), expected)
+
+
 def run_payload(run: WorkflowRun, event: str) -> dict[str, Any]:
     counts = {s: 0 for s in ("total", "succeeded", "failed")}
     for status in run.tasks.values_list("status", flat=True):
         counts["total"] += 1
         if status in counts:
             counts[status] += 1
+    failed_tasks = list(run.tasks.filter(status="failed").order_by("id").values_list("task_name", flat=True)[:5])
     started, finished = run.started_at, run.finished_at
     return {
         "event": event,
@@ -175,62 +241,90 @@ def run_payload(run: WorkflowRun, event: str) -> dict[str, Any]:
             "trigger": run.trigger,
             "triggered_by": run.triggered_by.name if run.triggered_by_id else None,
             "note": run.note,
+            "error": run.error,
+            "logical_date": run.logical_date.isoformat() if run.logical_date else None,
             "started_at": started.isoformat() if started else None,
             "finished_at": finished.isoformat() if finished else None,
             "duration_ms": int((finished - started).total_seconds() * 1000) if started and finished else None,
             "tasks_total": counts["total"],
             "tasks_succeeded": counts["succeeded"],
             "tasks_failed": counts["failed"],
+            "failed_tasks": failed_tasks,
             "url": f"{get_settings().public_url.rstrip('/')}/#/runs/{run.id}",
         },
     }
 
 
+def _recovered(runs: list[WorkflowRun]) -> list[WorkflowRun]:
+    out = []
+    for run in runs:
+        previous = (
+            WorkflowRun.objects.filter(
+                workflow_id=run.workflow_id, id__lt=run.id, status__in=("succeeded", "failed")
+            )
+            .order_by("-id")
+            .values_list("status", flat=True)
+            .first()
+        )
+        if previous == "failed":
+            out.append(run)
+    return out
+
+
 def enqueue(run_ids: list[int], event: str) -> int:
-    """Cria as entregas das integrações inscritas no evento. Chame dentro da transação da mudança."""
     if not run_ids:
         return 0
+    events = [event, "run.recovered"] if event == "run.succeeded" else [event]
     subs = [
         i
         for i in Integration.objects.filter(is_active=True, kind__in=OUTBOUND).only("id", "events", "workflows")
-        if event in (i.events or [])
+        if any(e in (i.events or []) for e in events)
     ]
     if not subs:
         return 0
-    runs = WorkflowRun.objects.select_related("workflow", "triggered_by").filter(id__in=run_ids)
+    runs = list(WorkflowRun.objects.select_related("workflow", "triggered_by").filter(id__in=run_ids))
+    targets = {event: runs}
+    if "run.recovered" in events and any("run.recovered" in (i.events or []) for i in subs):
+        targets["run.recovered"] = _recovered(runs)
     rows = []
-    for run in runs:
-        payload = None
-        for integ in subs:
-            if integ.workflows and run.workflow.name not in integ.workflows:
-                continue
-            payload = payload or run_payload(run, event)
-            rows.append(IntegrationDelivery(integration_id=integ.id, run_id=run.id, event=event, payload=payload))
+    for ev, ev_runs in targets.items():
+        for run in ev_runs:
+            payload = None
+            for integ in subs:
+                if ev not in (integ.events or []):
+                    continue
+                if integ.workflows and run.workflow.name not in integ.workflows:
+                    continue
+                payload = payload or run_payload(run, ev)
+                rows.append(IntegrationDelivery(integration_id=integ.id, run_id=run.id, event=ev, payload=payload))
     IntegrationDelivery.objects.bulk_create(rows)
     return len(rows)
 
 
-# --------------------------------------------------------------------- envio
-def render(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Corpo da requisição no formato que cada serviço espera."""
+def summary(payload: dict[str, Any]) -> tuple[str, list[str], str | None]:
     event = payload["event"]
+    run = payload.get("run") or {}
+    if event == "test":
+        return "🔔 Delco: teste de integração", ["Se você está lendo isto, a integração está funcionando."], run.get("url")
+    label = EVENTS.get(event, event)
+    title = f"{_EMOJI.get(event, '•')} {label}: {run.get('workflow')} #{run.get('id')}"
+    lines = [f"Tarefas: {run.get('tasks_succeeded', 0)} de {run.get('tasks_total', 0)} com sucesso"]
+    if run.get("tasks_failed"):
+        names = ", ".join(run.get("failed_tasks") or [])
+        lines.append(f"Com falha: {run['tasks_failed']}" + (f" ({names})" if names else ""))
+    if run.get("error"):
+        lines.append(f"Motivo: {run['error']}")
+    if run.get("duration_ms") is not None:
+        lines.append(f"Duração: {run['duration_ms'] / 1000:.1f} s".replace(".", ","))
+    if run.get("note"):
+        lines.append(f"Observação: {run['note']}")
+    return title, lines, run.get("url")
+
+
+def render(kind: str, payload: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
     if kind == "webhook":
         return payload
-    run = payload.get("run") or {}
-    label = EVENTS.get(event, "Teste de integração")
-    if event == "test":
-        title = "🔔 Delco: teste de integração"
-        lines = ["Se você está lendo isto, a integração está funcionando."]
-    else:
-        title = f"{_EMOJI.get(event, '•')} {label}: {run.get('workflow')} #{run.get('id')}"
-        lines = [f"Tarefas: {run.get('tasks_succeeded', 0)} de {run.get('tasks_total', 0)} com sucesso"]
-        if run.get("tasks_failed"):
-            lines.append(f"Com falha: {run['tasks_failed']}")
-        if run.get("duration_ms") is not None:
-            lines.append(f"Duração: {run['duration_ms'] / 1000:.1f} s".replace(".", ","))
-        if run.get("note"):
-            lines.append(f"Observação: {run['note']}")
-    link = run.get("url")
+    title, lines, link = summary(payload)
     if kind == "slack":
         text = f"*{title}*\n" + "\n".join(lines) + (f"\n<{link}|Abrir no Delco>" if link else "")
         return {"text": text}
@@ -240,11 +334,67 @@ def render(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
         return {"text": f"**{title}**  \n" + "  \n".join(lines) + (f"  \n[Abrir no Delco]({link})" if link else "")}
     if kind == "google_chat":
         return {"text": f"*{title}*\n" + "\n".join(lines) + (f"\n{link}" if link else "")}
+    if kind == "telegram":
+        body = f"<b>{escape(title)}</b>\n" + "\n".join(escape(x) for x in lines)
+        if link:
+            body += f'\n<a href="{escape(link)}">Abrir no Delco</a>'
+        return {
+            "chat_id": (config or {}).get("chat_id"),
+            "text": body,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
     raise ValueError(kind)
 
 
+def _email(integ: Integration, delivery_id: int, event: str, payload: dict[str, Any]) -> tuple[int | None, str | None]:
+    s = get_settings()
+    if not s.smtp_enabled:
+        return None, "Servidor de e-mail não configurado (DELCO_SMTP_HOST)."
+    recipients = (integ.config or {}).get("to") or []
+    if not recipients:
+        return None, "Nenhum destinatário configurado."
+    title, lines, link = summary(payload)
+    msg = EmailMessage()
+    msg["Subject"] = title
+    msg["From"] = s.smtp_from
+    msg["To"] = ", ".join(recipients)
+    msg["X-Delco-Event"] = event
+    msg["X-Delco-Delivery"] = str(delivery_id)
+    msg.set_content("\n".join(lines) + (f"\n\nAbrir no Delco: {link}" if link else "") + "\n")
+    items = "".join(f"<li>{escape(x)}</li>" for x in lines)
+    button = (
+        f'<p><a href="{escape(link)}" style="background:#191d20;color:#fff;padding:8px 14px;'
+        f'border-radius:6px;text-decoration:none">Abrir no Delco</a></p>'
+        if link
+        else ""
+    )
+    msg.add_alternative(
+        f'<div style="font-family:Arial,sans-serif;font-size:14px;color:#191d20">'
+        f"<h2 style=\"font-size:17px\">{escape(title)}</h2><ul>{items}</ul>{button}</div>",
+        subtype="html",
+    )
+    try:
+        if s.smtp_security == "ssl":
+            client = smtplib.SMTP_SSL(s.smtp_host, s.smtp_port, timeout=s.webhook_timeout)
+        else:
+            client = smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=s.webhook_timeout)
+        with client:
+            if s.smtp_security == "starttls":
+                client.starttls(context=ssl.create_default_context())
+            if s.smtp_user:
+                client.login(s.smtp_user, s.smtp_password)
+            client.send_message(msg)
+    except (smtplib.SMTPException, OSError) as exc:
+        return None, f"{type(exc).__name__}: {exc}"[:500]
+    return 250, None
+
+
 def _post(integ: Integration, delivery_id: int, event: str, payload: dict[str, Any]) -> tuple[int | None, str | None]:
-    body_obj = render(integ.kind, {**payload, "delivery_id": delivery_id, "sent_at": utcnow().isoformat()})
+    full = {**payload, "delivery_id": delivery_id, "sent_at": utcnow().isoformat()}
+    if integ.kind == "email":
+        return _email(integ, delivery_id, event, full)
+    body_obj = render(integ.kind, full, integ.config)
     body = json.dumps(body_obj, ensure_ascii=False, default=str).encode()
     headers = {
         "Content-Type": "application/json",
@@ -255,11 +405,17 @@ def _post(integ: Integration, delivery_id: int, event: str, payload: dict[str, A
     if integ.kind == "webhook" and integ.secret:
         sig = hmac.new(integ.secret.encode(), body, hashlib.sha256).hexdigest()
         headers["X-Delco-Signature"] = f"sha256={sig}"
+    url = integ.url or ""
+    if integ.kind == "telegram":
+        url = f"{get_settings().telegram_api_url.rstrip('/')}/bot{integ.secret}/sendMessage"
     try:
         with httpx.Client(timeout=get_settings().webhook_timeout, follow_redirects=False) as client:
-            resp = client.post(integ.url or "", content=body, headers=headers)
+            resp = client.post(url, content=body, headers=headers)
     except httpx.HTTPError as exc:
-        return None, f"{type(exc).__name__}: {exc}"[:500]
+        text = f"{type(exc).__name__}: {exc}"
+        if integ.secret and integ.kind == "telegram":
+            text = text.replace(integ.secret, "•••")
+        return None, text[:500]
     if 200 <= resp.status_code < 300:
         return resp.status_code, None
     return resp.status_code, f"HTTP {resp.status_code}: {resp.text[:300]}"
@@ -276,7 +432,6 @@ def backoff(attempts: int) -> float:
 
 
 def deliver_due(limit: int = 20) -> dict[str, int]:
-    """Envia as entregas pendentes cujo horário chegou. Seguro com vários agendadores."""
     now = utcnow()
     with transaction.atomic():
         ids = list(
@@ -287,7 +442,6 @@ def deliver_due(limit: int = 20) -> dict[str, int]:
         )
         if not ids:
             return {"sent": 0, "failed": 0, "retry": 0}
-        # posse temporária: outro agendador não pega a mesma entrega enquanto esta envia
         IntegrationDelivery.objects.filter(id__in=ids).update(next_attempt_at=now + timedelta(seconds=CLAIM_SECONDS))
     result = {"sent": 0, "failed": 0, "retry": 0}
     for d in IntegrationDelivery.objects.select_related("integration").filter(id__in=ids).order_by("id"):
@@ -316,8 +470,23 @@ def deliver_due(limit: int = 20) -> dict[str, int]:
     return result
 
 
+def redeliver(delivery_id: int, *, user_id: int | None) -> IntegrationDelivery:
+    from .store import audit
+
+    d = IntegrationDelivery.objects.filter(id=delivery_id).first()
+    if d is None:
+        raise LookupError(delivery_id)
+    if d.status == "pending":
+        raise IntegrationError({"status": "Esta entrega já está na fila."})
+    IntegrationDelivery.objects.filter(id=d.id).update(
+        status="pending", attempts=0, next_attempt_at=Now(), error=None, response_code=None, sent_at=None
+    )
+    audit(user_id, "integration.redeliver", f"integration:{d.integration_id}", {"delivery": d.id})
+    d.refresh_from_db()
+    return d
+
+
 def send_test(integ: Integration, *, user_id: int | None) -> IntegrationDelivery:
-    """Envia na hora uma mensagem de teste e registra a entrega."""
     from .store import audit
 
     if integ.kind not in OUTBOUND:
@@ -340,8 +509,8 @@ def send_test(integ: Integration, *, user_id: int | None) -> IntegrationDelivery
     return d
 
 
-# ------------------------------------------------------------------ leitura
 def as_dict(i: Integration, *, stats: dict[str, int] | None = None) -> dict[str, Any]:
+    config = i.config or {}
     return {
         "id": i.id,
         "name": i.name,
@@ -353,6 +522,9 @@ def as_dict(i: Integration, *, stats: dict[str, int] | None = None) -> dict[str,
         "token_prefix": i.token_prefix,
         "hook_path": f"/api/hooks/{i.token_prefix}…" if i.kind == "trigger" else None,
         "has_secret": bool(i.secret),
+        "require_signature": bool(config.get("require_signature")) if i.kind == "trigger" else None,
+        "chat_id": config.get("chat_id") if i.kind == "telegram" else None,
+        "recipients": config.get("to") if i.kind == "email" else None,
         "is_active": i.is_active,
         "created_by": i.created_by.name if i.created_by_id and i.created_by else None,
         "created_at": i.created_at,
@@ -363,7 +535,6 @@ def as_dict(i: Integration, *, stats: dict[str, int] | None = None) -> dict[str,
 
 
 def _mask(url: str) -> str:
-    """Mostra o destino sem expor o segredo que costuma vir no caminho da URL."""
     p = urlparse(url)
     path = p.path or ""
     shown = path[:12] + ("…" if len(path) > 12 else "")
@@ -388,12 +559,11 @@ def list_all() -> list[dict[str, Any]]:
     return out
 
 
-def deliveries(integration_id: int, limit: int = 50) -> list[dict[str, Any]]:
-    rows = (
-        IntegrationDelivery.objects.filter(integration_id=integration_id)
-        .select_related("run__workflow")
-        .order_by("-id")[:limit]
-    )
+def deliveries(integration_id: int, limit: int = 50, status: str | None = None) -> list[dict[str, Any]]:
+    qs = IntegrationDelivery.objects.filter(integration_id=integration_id)
+    if status:
+        qs = qs.filter(status=status)
+    rows = qs.select_related("run__workflow").order_by("-id")[:limit]
     return [
         {
             "id": d.id,

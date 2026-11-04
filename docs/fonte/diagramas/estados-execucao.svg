@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="393pt" height="267pt"
+ viewBox="0.00 0.00 392.80 266.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 252.4)">
+<title>execucao</title>
+<g id="node1" class="node">
+<title>queued</title>
+<path fill="#fdfbfa" stroke="#8a9eab" stroke-width="2" d="M42,-118C42,-118 12,-118 12,-118 6,-118 0,-112 0,-106 0,-106 0,-94 0,-94 0,-88 6,-82 12,-82 12,-82 42,-82 42,-82 48,-82 54,-88 54,-94 54,-94 54,-106 54,-106 54,-112 48,-118 42,-118"/>
+<text text-anchor="start" x="11" y="-97.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">queued</text>
+</g>
+<g id="node2" class="node">
+<title>running</title>
+<path fill="#fdfbfa" stroke="#4c6170" stroke-width="2" d="M175.5,-118C175.5,-118 145.5,-118 145.5,-118 139.5,-118 133.5,-112 133.5,-106 133.5,-106 133.5,-94 133.5,-94 133.5,-88 139.5,-82 145.5,-82 145.5,-82 175.5,-82 175.5,-82 181.5,-82 187.5,-88 187.5,-94 187.5,-94 187.5,-106 187.5,-106 187.5,-112 181.5,-118 175.5,-118"/>
+<text text-anchor="start" x="142" y="-97.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">running</text>
+</g>
+<g id="edge1" class="edge">
+<title>queued&#45;&gt;running</title>
+<path fill="none" stroke="#8a9eab" d="M54.29,-100C74.9,-100 103.71,-100 125.97,-100"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="126.25,-102.45 133.25,-100 126.25,-97.55 126.25,-102.45"/>
+<text text-anchor="middle" x="92" y="-102.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">vaga livre</text>
+</g>
+<g id="node5" class="node">
+<title>cancelled</title>
+<path fill="#fdfbfa" stroke="#65695b" stroke-width="2" d="M352,-36C352,-36 312,-36 312,-36 306,-36 300,-30 300,-24 300,-24 300,-12 300,-12 300,-6 306,0 312,0 312,0 352,0 352,0 358,0 364,-6 364,-12 364,-12 364,-24 364,-24 364,-30 358,-36 352,-36"/>
+<text text-anchor="start" x="308" y="-15.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">cancelled</text>
+</g>
+<g id="edge5" class="edge">
+<title>queued&#45;&gt;cancelled</title>
+<path fill="none" stroke="#8a9eab" d="M54.29,-89.56C74.81,-81.5 104.1,-70.21 130,-61 164.83,-48.62 172.99,-43.36 209,-35 236.66,-28.58 268.44,-24.24 292.63,-21.56"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="293.18,-23.96 299.88,-20.78 292.66,-19.09 293.18,-23.96"/>
+<text text-anchor="middle" x="160.5" y="-63.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">operador</text>
+</g>
+<g id="node3" class="node">
+<title>succeeded</title>
+<path fill="#fdfbfa" stroke="#9ca38e" stroke-width="2" d="M352,-238C352,-238 312,-238 312,-238 306,-238 300,-232 300,-226 300,-226 300,-214 300,-214 300,-208 306,-202 312,-202 312,-202 352,-202 352,-202 358,-202 364,-208 364,-214 364,-214 364,-226 364,-226 364,-232 358,-238 352,-238"/>
+<text text-anchor="start" x="308" y="-217.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">succeeded</text>
+</g>
+<g id="edge2" class="edge">
+<title>running&#45;&gt;succeeded</title>
+<path fill="none" stroke="#8a9eab" d="M187.24,-118.23C217.41,-139.58 267.38,-174.96 299.74,-197.87"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="298.44,-199.95 305.57,-202 301.27,-195.95 298.44,-199.95"/>
+<text text-anchor="middle" x="245.5" y="-186.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">todas ok</text>
+</g>
+<g id="node4" class="node">
+<title>failed</title>
+<path fill="#fdfbfa" stroke="#a04e3c" stroke-width="2" d="M347,-155C347,-155 317,-155 317,-155 311,-155 305,-149 305,-143 305,-143 305,-131 305,-131 305,-125 311,-119 317,-119 317,-119 347,-119 347,-119 353,-119 359,-125 359,-131 359,-131 359,-143 359,-143 359,-149 353,-155 347,-155"/>
+<text text-anchor="start" x="316" y="-134.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">failed</text>
+</g>
+<g id="edge3" class="edge">
+<title>running&#45;&gt;failed</title>
+<path fill="none" stroke="#8a9eab" d="M187.68,-94.89C212.64,-91.15 250.92,-88.36 282,-99 291.41,-102.22 300.42,-108.07 308.08,-114.23"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="306.74,-116.31 313.67,-118.96 309.91,-112.57 306.74,-116.31"/>
+<text text-anchor="middle" x="245.5" y="-110.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">alguma falhou ou</text>
+<text text-anchor="middle" x="245.5" y="-101.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">tempo limite</text>
+</g>
+<g id="edge4" class="edge">
+<title>running&#45;&gt;cancelled</title>
+<path fill="none" stroke="#8a9eab" d="M187.58,-86.68C194.52,-83.17 202.03,-79.42 209,-76 237.1,-62.22 269.06,-47.05 293.21,-35.68"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="294.52,-37.77 299.81,-32.57 292.43,-33.34 294.52,-37.77"/>
+<text text-anchor="middle" x="245.5" y="-78.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">operador</text>
+</g>
+<g id="edge8" class="edge">
+<title>succeeded&#45;&gt;queued</title>
+<path fill="none" stroke="#8a9eab" d="M299.85,-216.54C259.61,-211.4 187.85,-199.88 130,-178 102.26,-167.51 95.48,-163.11 72,-145 63.86,-138.73 55.77,-130.99 48.78,-123.71"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="50.25,-121.69 43.67,-118.27 46.68,-125.05 50.25,-121.69"/>
+<text text-anchor="middle" x="160.5" y="-207.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">refazer a partir</text>
+<text text-anchor="middle" x="160.5" y="-198.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">de uma tarefa</text>
+</g>
+<g id="edge6" class="edge">
+<title>failed&#45;&gt;queued</title>
+<path fill="none" stroke="#8a9eab" d="M304.93,-150.47C297.7,-153.57 289.71,-156.42 282,-158 250.22,-164.52 241.07,-162.91 209,-158 155.64,-149.82 96.56,-128.41 60.87,-114.02"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="61.46,-111.61 54.05,-111.24 59.61,-116.15 61.46,-111.61"/>
+<text text-anchor="middle" x="160.5" y="-165.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">retomar ou</text>
+<text text-anchor="middle" x="160.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">marcar tarefa</text>
+</g>
+<g id="edge7" class="edge">
+<title>cancelled&#45;&gt;queued</title>
+<path fill="none" stroke="#8a9eab" d="M299.66,-13.27C259.2,-8.43 187.22,-4.12 130,-24 98.92,-34.8 69.47,-58.77 50.28,-76.92"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="48.48,-75.25 45.14,-81.87 51.88,-78.78 48.48,-75.25"/>
+<text text-anchor="middle" x="160.5" y="-26.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">retomar</text>
+</g>
+</g>
+</svg>

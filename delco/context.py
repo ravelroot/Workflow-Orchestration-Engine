@@ -1,5 +1,3 @@
-"""Objeto ``ctx`` recebido por toda tarefa."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -12,14 +10,6 @@ LEVELS = ("debug", "info", "warning", "error")
 
 @dataclass
 class TaskContext:
-    """Informações e utilitários da execução atual.
-
-    * ``params``: parâmetros da execução (padrões do workflow + o que foi enviado no disparo).
-    * ``upstream``: resultado de cada tarefa da qual esta depende, por nome.
-    * ``idempotency_key``: igual em todas as tentativas da mesma tarefa na mesma execução.
-      Use para não repetir efeitos externos (cobranças, e-mails, inserts) numa retentativa.
-    """
-
     workflow: str
     run_id: int
     task_name: str
@@ -49,7 +39,7 @@ class TaskContext:
         if self._send:
             for line in text.splitlines() or [""]:
                 self._send(("log", level, line))
-        else:  # execução local, fora do worker
+        else:
             print(f"[{level}] {text}")
 
     def warning(self, message: Any) -> None:
@@ -59,9 +49,18 @@ class TaskContext:
         self.log(message, "error")
 
     def progress(self, percent: float, message: str | None = None) -> None:
-        """Informa o andamento (0 a 100). Aparece como barra no painel."""
         value = max(0, min(100, int(round(percent))))
         if self._send:
             self._send(("progress", value))
         if message:
             self.log(message)
+
+    def skip(self, reason: str = "Pulada pela própria tarefa.") -> None:
+        from .sdk import Skip
+
+        raise Skip(reason)
+
+    def fail(self, reason: str, *, retry: bool = False) -> None:
+        from .sdk import Fail
+
+        raise Fail(reason, retry=retry)

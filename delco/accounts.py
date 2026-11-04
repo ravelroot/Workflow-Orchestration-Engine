@@ -1,5 +1,3 @@
-"""Usuários, sessões e tokens pessoais (ORM do Django)."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,8 +35,6 @@ class ValidationError(Exception):
 
 @dataclass
 class Principal:
-    """Quem fez a requisição (``request.user`` no Django REST Framework)."""
-
     id: int
     email: str
     name: str
@@ -57,7 +53,6 @@ class Principal:
 
 
 def _by_email(qs: QuerySet[User], email: str) -> QuerySet[User]:
-    """Busca pelo índice único ``lower(email)``."""
     return qs.annotate(email_lower=Lower("email")).filter(email_lower=email.strip().lower())
 
 
@@ -95,7 +90,6 @@ def login(settings: Settings, email: str, password: str) -> dict[str, Any]:
                 locked, failures = now + timedelta(minutes=settings.login_lock_minutes), 0
             User.objects.filter(pk=user.pk).update(failed_logins=failures, locked_until=locked)
             audit(user.id, "auth.failed", f"user:{user.id}", {"locked": locked is not None})
-            # a falha precisa ser gravada (COMMIT) antes de responder; por isso não levanta aqui dentro
             failure = AuthError("invalid_credentials", "E-mail ou senha incorretos.")
     if failure:
         raise failure
@@ -109,6 +103,7 @@ def login(settings: Settings, email: str, password: str) -> dict[str, Any]:
         "token": token,
         "expires_at": row.expires_at,
         "user": {"id": user.id, "email": user.email, "name": user.name, "role": user.role},
+        "preferences": merged_preferences(user.preferences),
     }
 
 
@@ -142,14 +137,12 @@ def change_password(principal: Principal, current: str, new: str) -> None:
         if not verify_password(current or "", user.password_hash):
             raise ValidationError({"current_password": "Senha atual incorreta."})
         User.objects.filter(pk=user.pk).update(password_hash=hash_password(new), updated_at=Now())
-        # encerra as outras sessões; tokens pessoais continuam valendo
         ApiToken.objects.filter(user_id=principal.id, kind="session", revoked_at__isnull=True).exclude(
             pk=principal.token_id
         ).update(revoked_at=Now())
         audit(principal.id, "auth.password", f"user:{principal.id}", {})
 
 
-# ------------------------------------------------------------------ tokens
 def list_tokens(user_id: int) -> list[dict[str, Any]]:
     return list(
         ApiToken.objects.filter(user_id=user_id, kind="personal", revoked_at__isnull=True)
@@ -190,7 +183,6 @@ def revoke_token(principal: Principal, token_id: int) -> bool:
     return bool(n)
 
 
-# ------------------------------------------------------------------- usuários
 def _validate_user(data: dict[str, Any], *, creating: bool) -> dict[str, str]:
     errors: dict[str, str] = {}
     if creating or "email" in data:
@@ -273,3 +265,53 @@ def update_user(user_id: int, data: dict[str, Any], actor: Principal) -> dict[st
         audit(actor.id, "user.update", f"user:{user_id}", {"fields": changed})
         user = User.objects.get(pk=user_id)
     return _public(user)
+
+
+PREFERENCES: dict[str, tuple[Any, tuple[Any, ...] | type]] = {
+    "theme": ("system", ("system", "light", "dark")),
+    "palette": ("0", ("0", "1", "2", "3", "4")),
+    "time_zone": ("local", ("local", "utc")),
+    "density": ("comfortable", ("comfortable", "compact")),
+    "page_size": (25, (25, 50, 100)),
+    "notify_failures": (False, bool),
+    "notify_mine": (True, bool),
+    "log_wrap": (True, bool),
+}
+
+
+def merged_preferences(stored: dict[str, Any] | None) -> dict[str, Any]:
+    out = {k: default for k, (default, _) in PREFERENCES.items()}
+    for key, value in (stored or {}).items():
+        if key in PREFERENCES:
+            out[key] = value
+    return out
+
+
+def get_preferences(user_id: int) -> dict[str, Any]:
+    stored = User.objects.filter(pk=user_id).values_list("preferences", flat=True).first()
+    return merged_preferences(stored)
+
+
+def update_preferences(principal: Principal, data: dict[str, Any]) -> dict[str, Any]:
+    errors: dict[str, str] = {}
+    clean: dict[str, Any] = {}
+    for key, value in (data or {}).items():
+        if key not in PREFERENCES:
+            errors[key] = "Preferência desconhecida."
+            continue
+        _, allowed = PREFERENCES[key]
+        if allowed is bool:
+            if not isinstance(value, bool):
+                errors[key] = "Use true ou false."
+                continue
+        elif value not in allowed:
+            errors[key] = "Escolha uma das opções: " + ", ".join(str(a) for a in allowed) + "."
+            continue
+        clean[key] = value
+    if errors:
+        raise ValidationError(errors)
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=principal.id)
+        prefs = {**(user.preferences or {}), **clean}
+        User.objects.filter(pk=user.pk).update(preferences=prefs, updated_at=Now())
+    return merged_preferences(prefs)

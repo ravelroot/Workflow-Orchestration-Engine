@@ -1,11 +1,3 @@
-"""Ponte Redis → Channels.
-
-O agendador e os workers publicam cada evento no canal ``delco:events`` do Redis.
-Cada processo da API mantém uma assinatura e repassa o evento ao grupo certo do
-Channels: ``delco.eventos`` (todos os navegadores) ou ``delco.tentativa.<id>``
-(só quem está com o log daquela tentativa aberto).
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -54,7 +46,7 @@ class _Listener:
                         await forward(layer, message["data"])
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # Redis fora do ar: tenta de novo
+            except Exception as exc:
                 log.warning("Assinatura de eventos caiu (%s); reconectando em 2 s", exc)
                 await asyncio.sleep(2)
             finally:

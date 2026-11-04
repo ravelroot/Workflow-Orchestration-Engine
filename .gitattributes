@@ -2,6 +2,7 @@
 *.cmd text eol=crlf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+Makefile text eol=lf
 *.png binary
 *.pdf binary
 *.woff2 binary

@@ -1,12 +1,3 @@
-"""Modelos do Django: a fonte da verdade de todo o estado do Delco.
-
-As tabelas têm nomes fixos (``db_table``) e as restrições ficam no próprio
-MySQL: CHECK, índices, chave única por data lógica (índice funcional) e ON DELETE
-no banco (``DB_CASCADE``/``DB_SET_NULL``). Assim a garantia vale mesmo para
-quem escreve fora do ORM, e o agendador e os workers podem confiar no banco
-para resolver disputas.
-"""
-
 from __future__ import annotations
 
 from django.db import models
@@ -40,10 +31,12 @@ class Trigger(models.TextChoices):
     API = "api", "API"
     CLI = "cli", "CLI"
     WEBHOOK = "webhook", "Webhook"
+    BACKFILL = "backfill", "Reprocessamento"
 
 
 class WorkerStatus(models.TextChoices):
     ONLINE = "online", "Online"
+    PAUSED = "paused", "Pausado"
     STOPPING = "stopping", "Parando"
     OFFLINE = "offline", "Offline"
 
@@ -72,6 +65,7 @@ class AttemptStatus(models.TextChoices):
     TIMED_OUT = "timed_out", "Tempo esgotado"
     LOST = "lost", "Perdida"
     CANCELLED = "cancelled", "Cancelada"
+    SKIPPED = "skipped", "Pulada"
 
 
 class IntegrationKind(models.TextChoices):
@@ -79,6 +73,8 @@ class IntegrationKind(models.TextChoices):
     DISCORD = "discord", "Discord"
     TEAMS = "teams", "Microsoft Teams"
     GOOGLE_CHAT = "google_chat", "Google Chat"
+    TELEGRAM = "telegram", "Telegram"
+    EMAIL = "email", "E-mail"
     WEBHOOK = "webhook", "Webhook genérico"
     TRIGGER = "trigger", "Gatilho por URL"
 
@@ -100,10 +96,7 @@ def _in(field: str, choices: type[models.TextChoices]) -> Q:
     return Q(**{f"{field}__in": choices.values})
 
 
-# =========================================================================== acesso
 class User(models.Model):
-    """Conta do painel. Senha guardada com o hasher scrypt do Django."""
-
     email = models.CharField(max_length=254)
     name = models.CharField(max_length=120)
     password_hash = models.CharField(max_length=255)
@@ -112,6 +105,7 @@ class User(models.Model):
     failed_logins = models.IntegerField(default=0, db_default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
+    preferences = models.JSONField(default=dict, db_default={})
     created_at = models.DateTimeField(default=tz.now, db_default=Now())
     updated_at = models.DateTimeField(default=tz.now, db_default=Now())
 
@@ -128,8 +122,6 @@ class User(models.Model):
 
 
 class ApiToken(models.Model):
-    """Token opaco: só o SHA-256 fica no banco."""
-
     user = models.ForeignKey(User, on_delete=models.DB_CASCADE, related_name="tokens")
     name = models.CharField(max_length=120)
     kind = models.CharField(max_length=16, choices=TokenKind.choices)
@@ -157,10 +149,12 @@ class AuditLog(models.Model):
 
     class Meta:
         db_table = "audit_log"
-        indexes = [models.Index(fields=["-created_at"], name="audit_log_created_idx")]
+        indexes = [
+            models.Index(fields=["-created_at"], name="audit_log_created_idx"),
+            models.Index(fields=["action", "-id"], name="audit_log_action_idx"),
+        ]
 
 
-# ====================================================================== definições
 class Workflow(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(default="", db_default="")
@@ -170,6 +164,9 @@ class Workflow(models.Model):
     default_params = models.JSONField(default=dict, db_default={})
     tags = models.JSONField(default=list, db_default=[])
     source_file = models.CharField(max_length=500, null=True, blank=True)
+    source_code = models.TextField(null=True, blank=True)
+    source_hash = models.CharField(max_length=64, null=True, blank=True)
+    params_schema = models.JSONField(default=dict, db_default={})
     current_version = models.ForeignKey(
         "WorkflowVersion", null=True, blank=True, on_delete=models.DB_SET_NULL, related_name="+"
     )
@@ -193,14 +190,13 @@ class Workflow(models.Model):
 
 
 class WorkflowVersion(models.Model):
-    """Cada mudança no grafo vira uma versão nova; execuções antigas guardam a sua."""
-
     workflow = models.ForeignKey(
         Workflow, on_delete=models.DB_CASCADE, related_name="versions", db_index=False
     )
     version = models.IntegerField()
     fingerprint = models.CharField(max_length=64)
     graph = models.JSONField()
+    source_code = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(default=tz.now, db_default=Now())
 
     class Meta:
@@ -214,7 +210,6 @@ class WorkflowVersion(models.Model):
         ]
 
 
-# ======================================================================= execuções
 class WorkflowRun(models.Model):
     workflow = models.ForeignKey(Workflow, on_delete=models.DB_CASCADE, related_name="runs", db_index=False)
     version = models.ForeignKey(WorkflowVersion, on_delete=models.DO_NOTHING, related_name="runs")
@@ -228,6 +223,7 @@ class WorkflowRun(models.Model):
     logical_date = models.DateTimeField(null=True, blank=True)
     params = models.JSONField(default=dict, db_default={})
     note = models.TextField(null=True, blank=True)
+    error = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(default=tz.now, db_default=Now())
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -239,11 +235,9 @@ class WorkflowRun(models.Model):
             models.Index(fields=["workflow", "-id"], name="workflow_runs_workflow_idx"),
             models.Index(fields=["status", "id"], name="workflow_runs_open_idx"),
             models.Index(fields=["finished_at"], name="workflow_runs_finished_idx"),
+            models.Index(fields=["workflow", "logical_date"], name="workflow_runs_logical_idx"),
         ]
         constraints = [
-            # Uma única execução agendada por data lógica, mesmo com vários agendadores. O MySQL
-            # não tem índice parcial: o índice funcional usa a data só quando trigger = 'schedule'
-            # (nas outras fica NULL, e NULL não colide).
             models.UniqueConstraint(
                 F("workflow"),
                 Case(When(trigger="schedule", then=F("logical_date"))),
@@ -381,10 +375,7 @@ class TaskLog(models.Model):
         constraints = [models.CheckConstraint(condition=_in("level", LogLevel), name="task_logs_level_check")]
 
 
-# ===================================================================== integrações
 class Integration(models.Model):
-    """Destino de notificações (Slack, Discord, Teams, Google Chat, webhook) ou gatilho de entrada."""
-
     name = models.CharField(max_length=120)
     kind = models.CharField(max_length=16, choices=IntegrationKind.choices)
     url = models.CharField(max_length=1000, null=True, blank=True)
@@ -396,6 +387,7 @@ class Integration(models.Model):
     )
     events = models.JSONField(default=list, db_default=[])
     workflows = models.JSONField(default=list, db_default=[])
+    config = models.JSONField(default=dict, db_default={})
     is_active = models.BooleanField(default=True, db_default=True)
     created_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.DB_SET_NULL, related_name="integrations"
@@ -417,8 +409,6 @@ class Integration(models.Model):
 
 
 class IntegrationDelivery(models.Model):
-    """Notificação a enviar. Nasce na mesma transação que muda o estado da execução."""
-
     integration = models.ForeignKey(
         Integration, on_delete=models.DB_CASCADE, related_name="deliveries", db_index=False
     )

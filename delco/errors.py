@@ -1,0 +1,2 @@
+class WorkflowError(ValueError):
+    pass

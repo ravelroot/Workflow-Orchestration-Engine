@@ -1,9 +1,3 @@
-"""Configurações do Django.
-
-Tudo vem das variáveis DELCO_* (veja ``delco/config.py`` e o ``.env.example``):
-o mesmo pacote roda a API (Daphne/ASGI), o agendador e os workers.
-"""
-
 from __future__ import annotations
 
 import os
@@ -11,6 +5,7 @@ from urllib.parse import parse_qsl, unquote, urlparse
 
 from django.utils.csp import CSP
 
+from . import __version__
 from .config import get_settings
 
 DELCO = get_settings()
@@ -18,7 +13,6 @@ BASE_DIR = DELCO.web_dir.parent
 
 
 def _database(url: str) -> dict:
-    """Aceita mysql://usuario:senha@servidor:3306/banco (parâmetros extras na query vão para o driver)."""
     u = urlparse(url)
     return {
         "ENGINE": "django.db.backends.mysql",
@@ -29,11 +23,9 @@ def _database(url: str) -> dict:
         "PORT": str(u.port or 3306),
         "OPTIONS": {
             "charset": "utf8mb4",
-            # Sessão em UTC: NOW() do banco e as datas gravadas pelo Django falam o mesmo fuso.
             "init_command": "SET time_zone = '+00:00'",
-            **dict(parse_qsl(u.query)),  # ex.: ?ssl_mode=REQUIRED
+            **dict(parse_qsl(u.query)),
         },
-        # Cada processo (API, agendador e cada vaga do worker) abre e devolve a própria conexão.
         "CONN_MAX_AGE": 0,
         "CONN_HEALTH_CHECKS": True,
         "TEST": {"NAME": unquote(u.path.lstrip("/")) or "delco_test", "CHARSET": "utf8mb4"},
@@ -79,8 +71,6 @@ TEMPLATES = [
 DATABASES = {"default": _database(DELCO.database_url)}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Senhas com scrypt (hasher nativo do Django). Não usamos django.contrib.auth:
-# o Delco tem papéis fixos e tokens opacos próprios (veja delco/accounts.py).
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.ScryptPasswordHasher"]
 
 LANGUAGE_CODE = "pt-br"
@@ -88,16 +78,14 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# Painel web servido pelo WhiteNoise na raiz do site; arquivos do Swagger em /static/.
 STATIC_URL = "/static/"
-STATIC_ROOT = None  # os arquivos do Swagger saem direto dos pacotes (WHITENOISE_USE_FINDERS)
+STATIC_ROOT = None
 WHITENOISE_ROOT = DELCO.web_dir if DELCO.web_dir.is_dir() else None
 WHITENOISE_INDEX_FILE = True
 WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = DEBUG
 APPEND_SLASH = False
 
-# Cabeçalhos de segurança (CSP nativa do Django 6).
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
@@ -130,7 +118,7 @@ SPECTACULAR_SETTINGS = {
         "API do Delco, motor de orquestração de workflows. Autentique com `Authorization: Bearer <token>`: "
         "use o token de sessão devolvido por `POST /api/auth/login` ou um token pessoal criado no painel."
     ),
-    "VERSION": "1.1.0",
+    "VERSION": __version__,
     "SERVE_INCLUDE_SCHEMA": False,
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
     "SERVE_AUTHENTICATION": [],
@@ -145,27 +133,29 @@ SPECTACULAR_SETTINGS = {
         {"name": "workflows"},
         {"name": "execuções"},
         {"name": "monitoramento"},
+        {"name": "integrações"},
+        {"name": "sistema e manutenção"},
     ],
 }
 
-# WebSocket: os eventos chegam do Redis (pub/sub) e cada processo da API repassa
-# aos navegadores conectados nele pelos grupos do Channels.
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "delco": {
+        "text": {
             "format": "%(asctime)s %(levelname)-7s %(name)s · %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-        }
+        },
+        "json": {"()": "delco.logs.JsonFormatter"},
     },
-    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "delco"}},
-    "root": {"handlers": ["console"], "level": os.environ.get("DELCO_LOG_LEVEL", "INFO").upper()},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": DELCO.log_format}},
+    "root": {"handlers": ["console"], "level": DELCO.log_level},
     "loggers": {
         "django.request": {"level": "ERROR"},
         "daphne": {"level": "WARNING"},
         "django.channels.server": {"level": "WARNING"},
+        "httpx": {"level": "WARNING"},
     },
 }

@@ -1,6 +1,5 @@
-// Paleta de comandos (Ctrl+K / ⌘K) e atalhos de teclado no estilo "g e" (ir para Execuções).
-import { can, get, logout } from "./api.js";
-import { clear, h, icon, modal, STATUS, toast } from "./ui.js";
+import { can, get, logout, post, prefs, savePrefs } from "./api.js";
+import { clear, confirmDialog, h, icon, modal, STATUS, toast } from "./ui.js";
 
 const PAGES = [
   ["Visão geral", "#/", "overview", "g v"],
@@ -11,6 +10,7 @@ const PAGES = [
   ["Integrações", "#/integrations", "plug", "g i", "operator"],
   ["Minha conta e tokens", "#/account", "key", "g c"],
   ["Usuários e auditoria", "#/users", "users", "g u", "admin"],
+  ["Sistema", "#/system", "system", "g s", "admin"],
 ];
 
 const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -40,6 +40,18 @@ export async function openPalette() {
       const actions = [
         can("operator") ? { label: "Executar workflow…", ic: "play", run: () => app.triggerDialog() } : null,
         { label: "Alternar tema claro/escuro", ic: "moon", run: () => app.toggleTheme() },
+        { label: "Preferências", ic: "sliders", run: () => (location.hash = "#/account?tab=prefs") },
+        { label: "Trocar a paleta de cores", ic: "layers", run: async () => {
+          const next = String((Number(prefs().palette || 0) + 1) % 5);
+          try { await savePrefs({ palette: next }); } catch (ex) { toast(ex.message, "error"); }
+        } },
+        can("operator") ? { label: "Pausar todas as agendas…", ic: "pause", run: async () => {
+          if (!(await confirmDialog({ title: "Pausar todas as agendas?", text: "Nenhum horário agendado dispara até você retomar. Disparos manuais continuam funcionando.", confirm: "Pausar todas", danger: true }))) return;
+          try { const r = await post("/workflows/bulk", { action: "pause" }); toast(`${r.changed.length} agenda(s) pausada(s)`); } catch (ex) { toast(ex.message, "error"); }
+        } } : null,
+        can("operator") ? { label: "Retomar todas as agendas", ic: "play", run: async () => {
+          try { const r = await post("/workflows/bulk", { action: "resume" }); toast(`${r.changed.length} agenda(s) retomada(s)`); } catch (ex) { toast(ex.message, "error"); }
+        } } : null,
         { label: "Atalhos de teclado", ic: "keyboard", hint: "?", run: () => openShortcuts() },
         { label: "Documentação da API", ic: "api", run: () => window.open("/api/docs", "_blank", "noopener") },
         { label: "Sair", ic: "logout", run: async () => { await logout(); toast("Sessão encerrada"); } },

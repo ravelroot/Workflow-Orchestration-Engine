@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Delco — Banco de dados</title>
+<meta name="author" content="Erik Pimenta">
+<meta name="description" content="Esquema MySQL do Delco: tabelas, relacionamentos, estados e consultas">
+<meta name="generator" content="Delco">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="marca"><svg viewBox="0 0 64 64"><g fill="#000"><rect x="2" y="2" width="16" height="16" rx="4"/><rect x="24" y="2" width="16" height="16" rx="4"/><rect x="46" y="2" width="16" height="16" rx="4"/><rect x="2" y="24" width="16" height="16" rx="4"/><rect x="24" y="24" width="16" height="16" rx="4"/><rect x="2" y="46" width="16" height="16" rx="4"/></g><g fill="none" stroke="#000" stroke-width="3.5"><rect x="47.75" y="25.75" width="12.5" height="12.5" rx="3"/><rect x="25.75" y="47.75" width="12.5" height="12.5" rx="3"/><rect x="47.75" y="47.75" width="12.5" height="12.5" rx="3"/></g></svg>Delco</div>
+<span class="doc-title">Banco de dados</span>
+
+<section class="capa">
+  <svg class="logo" viewBox="0 0 64 64"><g fill="#fff"><rect x="2" y="2" width="16" height="16" rx="4"/><rect x="24" y="2" width="16" height="16" rx="4"/><rect x="46" y="2" width="16" height="16" rx="4"/><rect x="2" y="24" width="16" height="16" rx="4"/><rect x="24" y="24" width="16" height="16" rx="4"/><rect x="2" y="46" width="16" height="16" rx="4"/></g><g fill="none" stroke="#fff" stroke-width="3.5"><rect x="47.75" y="25.75" width="12.5" height="12.5" rx="3"/><rect x="25.75" y="47.75" width="12.5" height="12.5" rx="3"/><rect x="47.75" y="47.75" width="12.5" height="12.5" rx="3"/></g></svg>
+  <div class="bloco">
+    <div class="linha"></div>
+    <h1>Delco</h1>
+    <p class="sub">Banco de dados</p>
+    <p class="desc">Esquema MySQL 8.4: tabelas, relacionamentos, estados e consultas úteis</p>
+    <div class="quadros"><span class="on"></span><span></span><span></span><span class="on"></span><span></span><span class="on"></span><span></span><span></span><span class="on"></span><span></span><span></span><span></span></div>
+    <p class="copy">Copyright (©) 2026 Erik Pimenta</p>
+  </div>
+  <div class="rodape">Versão 1.2.0 · Novembro de 2026 · Licença MIT</div>
+</section>
+
+<section class="sumario">
+  <h1>Sumário</h1>
+  <ol>
+    <li class="cap"><a href="#c1">1. Visão geral</a></li>
+    <li class="sec"><a href="#c1-rel">Relacionamentos</a></li>
+    <li class="sec"><a href="#c1-regras">Regras do esquema</a></li>
+    <li class="cap"><a href="#c2">2. Tabelas</a></li>
+    <li class="sec"><a href="#t-users">users</a></li>
+    <li class="sec"><a href="#t-api_tokens">api_tokens</a></li>
+    <li class="sec"><a href="#t-audit_log">audit_log</a></li>
+    <li class="sec"><a href="#t-workflows">workflows</a></li>
+    <li class="sec"><a href="#t-workflow_versions">workflow_versions</a></li>
+    <li class="sec"><a href="#t-workflow_runs">workflow_runs</a></li>
+    <li class="sec"><a href="#t-task_instances">task_instances</a></li>
+    <li class="sec"><a href="#t-task_attempts">task_attempts</a></li>
+    <li class="sec"><a href="#t-task_logs">task_logs</a></li>
+    <li class="sec"><a href="#t-workers">workers</a></li>
+    <li class="sec"><a href="#t-integrations">integrations</a></li>
+    <li class="sec"><a href="#t-integration_deliveries">integration_deliveries</a></li>
+    <li class="cap"><a href="#c3">3. Máquinas de estado</a></li>
+    <li class="cap"><a href="#c4">4. Consultas úteis</a></li>
+    <li class="cap"><a href="#c5">5. Preparar o banco</a></li>
+    <li class="cap"><a href="#c6">6. Evolução do esquema</a></li>
+  </ol>
+</section>
+
+<section class="capitulo" id="c1">
+  <p class="num">Capítulo 1</p>
+  <h1>Visão geral</h1>
+  <p>O MySQL é a fonte da verdade do Delco: definições de workflows, execuções, tarefas, tentativas, logs, workers, usuários, integrações e auditoria. O Redis só transporta mensagens, sinais de vida e contadores de limite; se for apagado, o agendador republica o que estava na fila e nada se perde.</p>
+  <p>São 12 tabelas em quatro áreas, criadas e evoluídas pelas migrações do Django (<code>delco/migrations</code>). A API aplica as migrações ao subir, com trava para que várias réplicas não migrem juntas.</p>
+  <table>
+    <thead><tr><th>Área</th><th>Tabelas</th><th>Conteúdo</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag">Acesso</span></td><td><code>users</code> · <code>api_tokens</code> · <code>audit_log</code></td><td>Pessoas, preferências, sessões, tokens pessoais e o registro do que cada um fez</td></tr>
+      <tr><td><span class="tag">Definições</span></td><td><code>workflows</code> · <code>workflow_versions</code></td><td>Workflows lidos da pasta, parâmetros tipados, código e cada versão do grafo</td></tr>
+      <tr><td><span class="tag">Execução</span></td><td><code>workflow_runs</code> · <code>task_instances</code> · <code>task_attempts</code> · <code>task_logs</code> · <code>workers</code></td><td>Execuções, tarefas, tentativas, logs e processos que rodam o trabalho</td></tr>
+      <tr><td><span class="tag">Integrações</span></td><td><code>integrations</code> · <code>integration_deliveries</code></td><td>Destinos de aviso, gatilhos por URL e cada entrega com novas tentativas</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="c1-rel">Relacionamentos</h2>
+  <figure class="diagrama largo"><img src="diagramas/relacionamentos.svg"><figcaption>Tabelas e chaves estrangeiras</figcaption></figure>
+  <table>
+    <thead><tr><th>Relação</th><th>Ao apagar o pai</th></tr></thead>
+    <tbody>
+      <tr><td><code>workflow_runs.workflow_id → workflows</code></td><td>Apaga as execuções (CASCADE)</td></tr>
+      <tr><td><code>workflow_runs.version_id → workflow_versions</code></td><td>Sem ação: versões não são apagadas enquanto o workflow existe</td></tr>
+      <tr><td><code>task_instances.run_id → workflow_runs</code></td><td>Apaga as tarefas, tentativas e logs em cadeia</td></tr>
+      <tr><td><code>task_attempts.task_instance_id → task_instances</code></td><td>CASCADE</td></tr>
+      <tr><td><code>task_logs.attempt_id → task_attempts</code></td><td>CASCADE</td></tr>
+      <tr><td><code>task_instances.worker_id</code> · <code>task_attempts.worker_id → workers</code></td><td>Fica vazio (SET NULL)</td></tr>
+      <tr><td><code>workflow_runs.triggered_by_id</code> · <code>audit_log.user_id</code> · <code>integrations.created_by_id → users</code></td><td>SET NULL: o histórico fica</td></tr>
+      <tr><td><code>api_tokens.user_id → users</code></td><td>CASCADE</td></tr>
+      <tr><td><code>integration_deliveries.integration_id → integrations</code></td><td>CASCADE</td></tr>
+      <tr><td><code>integration_deliveries.run_id → workflow_runs</code></td><td>CASCADE</td></tr>
+      <tr><td><code>integrations.workflow_id → workflows</code></td><td>CASCADE (gatilho por URL)</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="c1-regras">Regras do esquema</h2>
+  <ul>
+    <li><strong>InnoDB e utf8mb4</strong> em todas as tabelas; datas em UTC (<code>datetime(6)</code>), convertidas para o fuso de cada pessoa no painel.</li>
+    <li><strong>Compare-and-set</strong>: toda mudança de estado inclui o estado esperado no <code>WHERE</code>; se outra máquina mudou antes, nada acontece.</li>
+    <li><strong>Chaves únicas</strong> garantem uma execução agendada por horário (<code>workflow_id</code> + <code>logical_date</code> para origem <code>schedule</code>), uma tarefa por nome em cada execução e uma tentativa por número.</li>
+    <li><strong>FOR UPDATE SKIP LOCKED</strong> nas leituras de trabalho do agendador e do worker, para que vários processos dividam a fila sem esperar uns pelos outros.</li>
+    <li><strong>JSON nativo</strong> para parâmetros, grafos, resultados, preferências e configuração de integrações.</li>
+    <li><strong>Segredos</strong>: tokens só como SHA-256; senhas com scrypt; URLs e tokens de bot nunca voltam inteiros pela API; parâmetros secretos mascarados na auditoria.</li>
+    <li><strong>Limpeza</strong>: execuções terminadas há mais de <code>DELCO_RETENTION_DAYS</code> (30) dias, entregas antigas, sessões vencidas e auditoria de mais de 180 dias saem sozinhas (ou pelo botão da tela Sistema).</li>
+  </ul>
+</section>
+
+<section class="capitulo" id="c2">
+  <p class="num">Capítulo 2</p>
+  <h1>Tabelas</h1>
+  <p>As tabelas abaixo são lidas dos próprios modelos do Django ao gerar este documento, então tipos, nulos, padrões, índices e restrições sempre batem com o código. <strong>PK</strong> é a chave primária, <strong>FK</strong> uma chave estrangeira e <strong>UK</strong> um valor único. Campos marcados com (1.2.0) entraram nesta versão.</p>
+  <div id="tabelas"></div>
+</section>
+
+<section class="capitulo" id="c3">
+  <p class="num">Capítulo 3</p>
+  <h1>Máquinas de estado</h1>
+  <p>Os estados vivem nas colunas <code>status</code>. Cada seta é uma atualização com compare-and-set; estados finais não mudam mais, exceto quando uma pessoa retoma a execução ou marca uma tarefa.</p>
+  <h2>Execução (<code>workflow_runs.status</code>)</h2>
+  <figure class="diagrama"><img src="diagramas/estados-execucao.svg"><figcaption>queued, running, succeeded, failed e cancelled</figcaption></figure>
+  <ul>
+    <li>Sai de <code>queued</code> quando há vaga dentro de <code>max_active_runs</code>.</li>
+    <li>Termina em <code>succeeded</code> quando todas as tarefas acabaram sem falha (tarefas puladas contam como sucesso).</li>
+    <li>Vai para <code>failed</code> se alguma tarefa falhou de vez ou se passou do <code>run_timeout</code>; nesse caso o motivo fica em <code>workflow_runs.error</code>.</li>
+    <li><strong>Retomar da falha</strong> e <strong>marcar tarefa</strong> devolvem uma execução terminada para <code>running</code>.</li>
+  </ul>
+  <h2>Tarefa (<code>task_instances.status</code>)</h2>
+  <figure class="diagrama"><img src="diagramas/estados-tarefa.svg"><figcaption>pending, queued, running, retry_wait, succeeded, failed, skipped e cancelled</figcaption></figure>
+  <ul>
+    <li><code>skipped</code> vem da regra de disparo, de <code>ctx.skip()</code> ou de uma marcação manual.</li>
+    <li><code>retry_wait</code> só acontece se o erro puder ser repetido (<code>retry_on</code> e <code>Fail(retry=True)</code>) e ainda houver tentativas.</li>
+    <li>Lease vencido (<code>lease_expires_at</code>) faz a tarefa voltar a <code>retry_wait</code> com a tentativa marcada como <code>lost</code>.</li>
+  </ul>
+  <h2>Worker (<code>workers.status</code>)</h2>
+  <figure class="diagrama"><img src="diagramas/estados-worker.svg"><figcaption>online, paused, stopping e offline</figcaption></figure>
+  <h2>Entrega (<code>integration_deliveries.status</code>)</h2>
+  <figure class="diagrama"><img src="diagramas/estados-entrega.svg"><figcaption>pending, sent e failed</figcaption></figure>
+  <p>O estado <code>paused</code> do worker é novo na 1.2.0: o worker termina o que roda, devolve à fila o que já tinha lido e espera. Uma entrega <code>failed</code> pode voltar a <code>pending</code> pelo botão <strong>Reenviar</strong>.</p>
+</section>
+
+<section class="capitulo" id="c4">
+  <p class="num">Capítulo 4</p>
+  <h1>Consultas úteis</h1>
+  <h2>Execuções em andamento por workflow</h2>
+  <pre>SELECT w.name, r.status, COUNT(*) AS total
+FROM workflow_runs r JOIN workflows w ON w.id = r.workflow_id
+WHERE r.status IN ('queued', 'running')
+GROUP BY w.name, r.status
+ORDER BY w.name;</pre>
+  <h2>Taxa de sucesso e duração dos últimos 7 dias</h2>
+  <pre>SELECT w.name,
+       SUM(r.status = 'succeeded') / COUNT(*) AS taxa_sucesso,
+       AVG(TIMESTAMPDIFF(SECOND, r.started_at, r.finished_at)) AS media_s
+FROM workflow_runs r JOIN workflows w ON w.id = r.workflow_id
+WHERE r.finished_at &gt; UTC_TIMESTAMP() - INTERVAL 7 DAY
+GROUP BY w.name
+ORDER BY taxa_sucesso;</pre>
+  <h2>Tarefas que mais falham</h2>
+  <pre>SELECT w.name AS workflow, t.task_name, COUNT(*) AS falhas
+FROM task_instances t
+JOIN workflow_runs r ON r.id = t.run_id
+JOIN workflows w ON w.id = r.workflow_id
+WHERE t.status = 'failed' AND t.finished_at &gt; UTC_TIMESTAMP() - INTERVAL 30 DAY
+GROUP BY w.name, t.task_name
+ORDER BY falhas DESC
+LIMIT 10;</pre>
+  <h2>Execuções que estouraram o tempo limite</h2>
+  <pre>SELECT r.id, w.name, r.error, r.started_at, r.finished_at
+FROM workflow_runs r JOIN workflows w ON w.id = r.workflow_id
+WHERE r.status = 'failed' AND r.error IS NOT NULL
+ORDER BY r.finished_at DESC
+LIMIT 20;</pre>
+  <h2>Reprocessamentos de um período</h2>
+  <pre>SELECT r.id, r.logical_date, r.status, r.note
+FROM workflow_runs r JOIN workflows w ON w.id = r.workflow_id
+WHERE w.name = 'relatorio_vendas_diario' AND r.`trigger` = 'backfill'
+ORDER BY r.logical_date;</pre>
+  <h2>Tarefas com posse vencida</h2>
+  <pre>SELECT id, run_id, task_name, worker_id, lease_expires_at
+FROM task_instances
+WHERE status = 'running' AND lease_expires_at &lt; UTC_TIMESTAMP(6);</pre>
+  <h2>Workers e vagas ocupadas</h2>
+  <pre>SELECT wk.id, wk.status, wk.concurrency,
+       (SELECT COUNT(*) FROM task_instances t WHERE t.worker_id = wk.id AND t.status = 'running') AS ocupadas,
+       wk.last_heartbeat_at
+FROM workers wk
+WHERE wk.status &lt;&gt; 'offline';</pre>
+  <h2>Parâmetros declarados de um workflow</h2>
+  <pre>SELECT name, JSON_PRETTY(params_schema) FROM workflows WHERE name = 'relatorio_vendas_diario';</pre>
+  <h2>Preferências das pessoas</h2>
+  <pre>SELECT email, preferences-&gt;&gt;'$.theme' AS tema, preferences-&gt;&gt;'$.palette' AS paleta,
+       preferences-&gt;&gt;'$.time_zone' AS fuso
+FROM users WHERE is_active;</pre>
+  <h2>Entregas com falha nas últimas 24 horas</h2>
+  <pre>SELECT i.name, i.kind, d.event, d.attempts, d.response_code, d.error
+FROM integration_deliveries d JOIN integrations i ON i.id = d.integration_id
+WHERE d.status = 'failed' AND d.created_at &gt; UTC_TIMESTAMP() - INTERVAL 1 DAY;</pre>
+  <h2>Quem fez o quê</h2>
+  <pre>SELECT a.created_at, u.email, a.action, a.target
+FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
+WHERE a.action IN ('run.backfill', 'run.mark', 'run.delete', 'worker.pause')
+ORDER BY a.created_at DESC
+LIMIT 50;</pre>
+  <div class="nota">Prefira consultar pelo painel, pela API ou pela CLI: elas já aplicam permissões, mascaram segredos e registram ações na auditoria. Use SQL direto para relatórios e investigação, sem atualizar o estado à mão.</div>
+</section>
+
+<section class="capitulo" id="c5">
+  <p class="num">Capítulo 5</p>
+  <h1>Preparar o banco</h1>
+  <p>Com o Docker Compose nada precisa ser feito: o contêiner do MySQL cria o banco e o usuário a partir do <code>.env</code>. Num MySQL próprio (8.4 ou mais novo):</p>
+  <pre>CREATE DATABASE delco CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'delco'@'%' IDENTIFIED BY 'troque-esta-senha';
+GRANT ALL PRIVILEGES ON delco.* TO 'delco'@'%';</pre>
+  <pre>export DELCO_DATABASE_URL=mysql://delco:troque-esta-senha@db.interno:3306/delco
+delco migrate
+delco doctor</pre>
+  <h2>Recomendações</h2>
+  <ul>
+        <li>Backup diário com <code>mysqldump --single-transaction --routines delco</code> ou snapshots do volume.</li>
+    <li>O <code>delco doctor</code> e a tela Sistema conferem a versão do MySQL e se há migrações pendentes.</li>
+    <li>Para testes, a suíte usa o banco <code>delco_test</code> (variável <code>DELCO_TEST_DATABASE_URL</code>), recriado a cada rodada.</li>
+  </ul>
+</section>
+
+<section class="capitulo" id="c6">
+  <p class="num">Capítulo 6</p>
+  <h1>Evolução do esquema</h1>
+  <table>
+    <thead><tr><th>Migração</th><th>Versão</th><th>O que mudou</th></tr></thead>
+    <tbody>
+      <tr><td><code>0001_inicial</code></td><td>1.0.0</td><td>Usuários, tokens, auditoria, workflows, versões, execuções, tarefas, tentativas, logs e workers, com chaves únicas e índices de trabalho</td></tr>
+      <tr><td><code>0002_integracoes</code></td><td>1.1.0</td><td>Integrações (Slack, Discord, Teams, Google Chat, webhook e gatilho por URL) e entregas com novas tentativas</td></tr>
+      <tr><td><code>0003_versao_1_2</code></td><td>1.2.0</td><td><code>users.preferences</code>; <code>workflows.params_schema</code>, <code>source_code</code> e <code>source_hash</code>; <code>workflow_versions.source_code</code>; <code>workflow_runs.error</code>; <code>integrations.config</code>; origem <code>backfill</code>; estados <code>paused</code> (worker) e <code>skipped</code> (tentativa); tipos <code>telegram</code> e <code>email</code>; índices <code>audit_log_action_idx</code> e <code>workflow_runs_logical_idx</code></td></tr>
+    </tbody>
+  </table>
+  <p>As migrações só acrescentam colunas com padrão e índices, então rodam com o Delco no ar. Para voltar uma versão, use <code>python manage.py migrate delco 0002</code> antes de subir o código antigo.</p>
+</section>
+</body>
+</html>

@@ -1,0 +1,79 @@
+@font-face { font-family: "Instrument Sans"; src: url("../../web/fonts/instrument-sans-latin-standard-normal.woff2"); font-weight: 400 700; }
+@font-face { font-family: "Instrument Sans"; src: url("../../web/fonts/instrument-sans-latin-ext-standard-normal.woff2"); font-weight: 400 700; unicode-range: U+0100-02BA, U+1E00-1EFF; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../web/fonts/jetbrains-mono-latin-wght-normal.woff2"); font-weight: 100 800; }
+
+@page {
+  size: A4;
+  margin: 22mm 20mm 20mm 20mm;
+  @top-left { content: element(marca); }
+  @top-right { content: string(doc); font: 8pt "Instrument Sans"; color: #8a9eab; }
+  @bottom-left { content: "Delco · " string(doc); font: 8pt "Instrument Sans"; color: #8a9eab; }
+  @bottom-right { content: counter(page); font: 600 8pt "Instrument Sans"; color: #1f292f; }
+}
+@page capa { margin: 0; @top-left { content: none; } @top-right { content: none; } @bottom-left { content: none; } @bottom-right { content: none; } }
+@page :first { margin: 0; }
+
+html { font-family: "Instrument Sans", sans-serif; font-size: 9.6pt; line-height: 1.5; color: #1f292f; }
+body { margin: 0; }
+.marca { position: running(marca); font: 600 8.5pt "Instrument Sans"; color: #1f292f; display: flex; align-items: center; gap: 5px; }
+.marca svg { width: 9pt; height: 9pt; }
+.doc-title { string-set: doc content(); display: none; }
+
+.capa { page: capa; height: 297mm; width: 210mm; background: #000; color: #fff; position: relative; break-after: page; }
+.capa .logo { position: absolute; top: 26mm; left: 20mm; width: 18mm; height: 18mm; }
+.capa .bloco { position: absolute; top: 110mm; left: 20mm; right: 26mm; }
+.capa .linha { width: 16mm; height: 1px; background: #8a9eab; margin-bottom: 12mm; }
+.capa h1 { font-size: 46pt; line-height: 1; margin: 0 0 6mm; font-weight: 700; color: #ebe0dd; letter-spacing: -0.02em; font-variation-settings: "wdth" 78; }
+.capa .sub { font-size: 16pt; font-weight: 600; color: #ebe0dd; margin: 0 0 6mm; font-variation-settings: "wdth" 84; }
+.capa .desc { font-size: 10pt; color: #a3b4bf; max-width: 120mm; }
+.capa .quadros { display: flex; gap: 2.4mm; margin-top: 14mm; }
+.capa .quadros span { width: 5mm; height: 5mm; border-radius: 1.2mm; border: 1px solid #2c3338; }
+.capa .quadros span.on { background: #ebe0dd; border-color: #ebe0dd; }
+.capa .copy { font-size: 8pt; color: #9ca38e; margin-top: 16mm; }
+.capa .rodape { position: absolute; bottom: 22mm; left: 20mm; right: 26mm; border-top: 1px solid #2c3338; padding-top: 6mm; font-size: 8pt; color: #a3b4bf; }
+.capa .rodape::before { content: ""; display: inline-block; width: 6pt; height: 6pt; border-radius: 50%; background: #8a9eab; margin-right: 6pt; vertical-align: 0; }
+
+h1, h2, h3, h4 { font-variation-settings: "wdth" 82; line-height: 1.15; color: #1f292f; }
+.capitulo { break-before: page; }
+.capitulo > .num { font-size: 8.5pt; font-weight: 600; color: #4c6170; margin: 0 0 2mm; }
+.capitulo > .num::before { content: ""; display: inline-block; width: 6pt; height: 6pt; border-radius: 50%; background: #4c6170; margin-right: 5pt; }
+h1 { font-size: 24pt; margin: 0 0 7mm; letter-spacing: -0.01em; }
+h2 { font-size: 13.5pt; margin: 7mm 0 2.5mm; break-after: avoid; }
+h3 { font-size: 10.5pt; margin: 5mm 0 1.5mm; break-after: avoid; }
+p { margin: 0 0 2.6mm; }
+ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+li { margin-bottom: 1.1mm; }
+strong { font-weight: 650; }
+a { color: inherit; text-decoration: none; }
+code { font-family: "JetBrains Mono", monospace; font-size: 7.8pt; background: #f4eeeb; border: 1px solid #e8dfdb; border-radius: 3px; padding: 0 2px; }
+pre { font-family: "JetBrains Mono", monospace; font-size: 7.6pt; line-height: 1.55; background: #161a1d; color: #ebe0dd; border-radius: 6px; padding: 4mm 5mm; margin: 2mm 0 4mm; white-space: pre-wrap; break-inside: avoid; }
+pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 5mm; font-size: 8.4pt; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { text-align: left; font-weight: 650; background: #f4eeeb; border-bottom: 1px solid #d6cbc5; padding: 1.8mm 2.2mm; font-size: 8pt; }
+td { border-bottom: 1px solid #e8dfdb; padding: 1.7mm 2.2mm; vertical-align: top; }
+td code { font-size: 7.4pt; }
+.nota { border-left: 3px solid #4c6170; background: #e2e8ec; padding: 3mm 4mm; margin: 2mm 0 4mm; font-size: 8.8pt; break-inside: avoid; }
+.nota.aviso { border-color: #7e5f28; background: #f4ead9; }
+figure { margin: 3mm 0 5mm; break-inside: avoid; text-align: center; }
+figure img { width: 100%; border: 1px solid #e8dfdb; border-radius: 4px; }
+figure.diagrama img { border: 0; max-height: 200mm; width: auto; max-width: 100%; }
+figure.diagrama.largo img { width: 100%; }
+figcaption { font-size: 7.8pt; color: #65695b; margin-top: 1.5mm; }
+.sumario { break-after: page; }
+.sumario h1 { margin-bottom: 6mm; }
+.sumario ol { list-style: none; padding: 0; margin: 0; }
+.sumario li { display: block; margin: 0; padding: 1.6mm 0; border-bottom: 1px solid #e8dfdb; }
+.sumario li.cap { font-weight: 650; padding-top: 3mm; }
+.sumario li.sec { padding-left: 4mm; font-size: 8.8pt; color: #34434d; }
+.sumario li a { display: flex; justify-content: space-between; color: inherit; text-decoration: none; }
+.sumario li a::after { content: target-counter(attr(href), page); font-variant-numeric: tabular-nums; }
+.cols { display: flex; gap: 6mm; }
+.cols > * { flex: 1; }
+.tag { display: inline-block; font-size: 7.4pt; padding: 0 1.5mm; border: 1px solid #d6cbc5; border-radius: 3px; background: #f4eeeb; }
+.pal { display: inline-block; width: 9mm; height: 9mm; border-radius: 50%; overflow: hidden; border: 1px solid #d6cbc5; margin-right: 2mm; vertical-align: middle; }
+.pal span { display: inline-block; width: 50%; height: 50%; }
+.campo-pk { font-weight: 650; }
+.tabela-doc { break-before: auto; }
+.tabela-doc h2 code { font-size: 11pt; background: none; border: 0; padding: 0; }

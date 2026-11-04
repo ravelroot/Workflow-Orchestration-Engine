@@ -1,5 +1,3 @@
-// Cliente HTTP + WebSocket. O token de sessão fica no sessionStorage: some ao fechar a aba.
-
 const KEY = "delco.session";
 let session = null;
 try {
@@ -30,7 +28,6 @@ function setSession(value) {
     if (value) sessionStorage.setItem(KEY, JSON.stringify(value));
     else sessionStorage.removeItem(KEY);
   } catch {
-    /* navegação privada sem storage: segue só em memória */
   }
   listeners.forEach((fn) => fn(value));
 }
@@ -56,7 +53,6 @@ export async function api(method, path, body) {
 
 export const get = (p) => api("GET", p);
 
-// Baixa uma resposta que não é JSON (CSV) com o token da sessão.
 export async function download(path, filename) {
   const res = await fetch(`/api${path}`, { headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {} });
   if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
@@ -71,18 +67,45 @@ export async function download(path, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export const post = (p, b) => api("POST", p, b ?? {});
+export const patch = (p, b) => api("PATCH", p, b ?? {});
+export const del = (p) => api("DELETE", p);
 
 export async function login(email, password) {
   const data = await api("POST", "/auth/login", { email, password });
-  setSession({ token: data.token, user: data.user, expires_at: data.expires_at });
+  setSession({ token: data.token, user: data.user, expires_at: data.expires_at, preferences: data.preferences || {} });
   return data.user;
+}
+
+export const DEFAULT_PREFS = {
+  theme: "system", palette: "0", time_zone: "local", density: "comfortable", page_size: 25, notify_failures: false, notify_mine: true, log_wrap: true,
+};
+const prefListeners = new Set();
+export const onPrefsChange = (fn) => prefListeners.add(fn);
+export function prefs() {
+  return { ...DEFAULT_PREFS, ...(session?.preferences || {}) };
+}
+export async function savePrefs(patch) {
+  const merged = await api("PATCH", "/auth/me/preferences", patch);
+  if (session) {
+    session = { ...session, preferences: merged };
+    try { sessionStorage.setItem(KEY, JSON.stringify(session)); } catch { session = { ...session }; }
+  }
+  prefListeners.forEach((fn) => fn(merged));
+  return merged;
+}
+export async function refreshMe() {
+  if (!session) return null;
+  const me = await api("GET", "/auth/me");
+  session = { ...session, user: { id: me.id, email: me.email, name: me.name, role: me.role }, preferences: me.preferences || {} };
+  try { sessionStorage.setItem(KEY, JSON.stringify(session)); } catch { session = { ...session }; }
+  prefListeners.forEach((fn) => fn(prefs()));
+  return me;
 }
 
 export async function logout() {
   try {
     await api("POST", "/auth/logout");
   } catch {
-    /* sessão já inválida */
   }
   live.stop();
   setSession(null);
@@ -93,7 +116,6 @@ export const can = (role) => {
   return session && level[session.user.role] >= level[role];
 };
 
-// --------------------------------------------------------------- tempo real
 export const live = {
   ws: null,
   handlers: new Set(),

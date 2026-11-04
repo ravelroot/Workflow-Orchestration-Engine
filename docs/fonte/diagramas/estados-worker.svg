@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="480pt" height="159pt"
+ viewBox="0.00 0.00 479.80 158.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 144.4)">
+<title>worker</title>
+<g id="node1" class="node">
+<title>online</title>
+<path fill="#fdfbfa" stroke="#9ca38e" stroke-width="2" d="M42,-99C42,-99 12,-99 12,-99 6,-99 0,-93 0,-87 0,-87 0,-75 0,-75 0,-69 6,-63 12,-63 12,-63 42,-63 42,-63 48,-63 54,-69 54,-75 54,-75 54,-87 54,-87 54,-93 48,-99 42,-99"/>
+<text text-anchor="start" x="11" y="-78.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">online</text>
+</g>
+<g id="node2" class="node">
+<title>paused</title>
+<path fill="#fdfbfa" stroke="#c09550" stroke-width="2" d="M165,-130C165,-130 135,-130 135,-130 129,-130 123,-124 123,-118 123,-118 123,-106 123,-106 123,-100 129,-94 135,-94 135,-94 165,-94 165,-94 171,-94 177,-100 177,-106 177,-106 177,-118 177,-118 177,-124 171,-130 165,-130"/>
+<text text-anchor="start" x="134" y="-109.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">paused</text>
+</g>
+<g id="edge1" class="edge">
+<title>online&#45;&gt;paused</title>
+<path fill="none" stroke="#8a9eab" d="M47.53,-99.25C54.69,-104.78 63.2,-110.14 72,-113 85.86,-117.51 101.87,-117.99 115.7,-117.07"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="115.94,-119.51 122.71,-116.47 115.52,-114.62 115.94,-119.51"/>
+<text text-anchor="middle" x="88.5" y="-119.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">pausar</text>
+</g>
+<g id="node3" class="node">
+<title>stopping</title>
+<path fill="#fdfbfa" stroke="#c09550" stroke-width="2" d="M300,-78C300,-78 265,-78 265,-78 259,-78 253,-72 253,-66 253,-66 253,-54 253,-54 253,-48 259,-42 265,-42 265,-42 300,-42 300,-42 306,-42 312,-48 312,-54 312,-54 312,-66 312,-66 312,-72 306,-78 300,-78"/>
+<text text-anchor="start" x="261" y="-57.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">stopping</text>
+</g>
+<g id="edge3" class="edge">
+<title>online&#45;&gt;stopping</title>
+<path fill="none" stroke="#8a9eab" d="M54.21,-78.78C73.29,-77.16 99.74,-74.93 123,-73 165.21,-69.49 213.74,-65.52 245.87,-62.9"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="246.09,-65.34 252.87,-62.33 245.69,-60.46 246.09,-65.34"/>
+<text text-anchor="middle" x="150" y="-75.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SIGTERM</text>
+</g>
+<g id="node4" class="node">
+<title>offline</title>
+<path fill="#fdfbfa" stroke="#65695b" stroke-width="2" d="M439,-36C439,-36 409,-36 409,-36 403,-36 397,-30 397,-24 397,-24 397,-12 397,-12 397,-6 403,0 409,0 409,0 439,0 439,0 445,0 451,-6 451,-12 451,-12 451,-24 451,-24 451,-30 445,-36 439,-36"/>
+<text text-anchor="start" x="405.5" y="-15.8" font-family="Courier,monospace" font-size="9.00" fill="#1f292f">offline</text>
+</g>
+<g id="edge6" class="edge">
+<title>online&#45;&gt;offline</title>
+<path fill="none" stroke="#8a9eab" d="M54.43,-72.82C60.2,-71.14 66.28,-69.44 72,-68 151.7,-47.89 171.59,-41.36 253,-30 300.33,-23.39 355.6,-20.35 389.96,-19"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="390.06,-21.45 396.96,-18.73 389.88,-16.55 390.06,-21.45"/>
+<text text-anchor="middle" x="215" y="-40.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">sem sinal</text>
+</g>
+<g id="edge2" class="edge">
+<title>paused&#45;&gt;online</title>
+<path fill="none" stroke="#8a9eab" d="M122.8,-105.29C104.73,-100.66 80.58,-94.47 61.17,-89.5"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="61.64,-87.09 54.26,-87.73 60.43,-91.84 61.64,-87.09"/>
+<text text-anchor="middle" x="88.5" y="-102.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">retomar</text>
+</g>
+<g id="edge4" class="edge">
+<title>paused&#45;&gt;stopping</title>
+<path fill="none" stroke="#8a9eab" d="M177.09,-101.6C196.91,-93.71 224.38,-82.76 246.16,-74.08"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="247.13,-76.33 252.73,-71.46 245.32,-71.78 247.13,-76.33"/>
+<text text-anchor="middle" x="215" y="-95.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SIGTERM</text>
+</g>
+<g id="edge5" class="edge">
+<title>stopping&#45;&gt;offline</title>
+<path fill="none" stroke="#8a9eab" d="M312.07,-51.4C334.7,-44.58 366.35,-35.05 390.06,-27.92"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="390.83,-30.24 396.83,-25.88 389.42,-25.55 390.83,-30.24"/>
+<text text-anchor="middle" x="354.5" y="-47.6" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">vagas livres</text>
+</g>
+</g>
+</svg>

@@ -1,5 +1,3 @@
-"""Integrações (notificações e gatilho por URL), desempenho, próximas execuções e exportação."""
-
 from __future__ import annotations
 
 import hashlib
@@ -16,19 +14,17 @@ from delco.models import Integration, IntegrationDelivery
 from delco.schedule import utcnow
 
 from .conftest import finished, run_status, wait_for
-from .test_api import auth, client  # noqa: F401  (fixture reaproveitada)
+from .test_api import auth, client
 
 
 class Receiver:
-    """Servidor HTTP local que faz o papel do Slack/webhook e guarda o que recebeu."""
-
     def __init__(self, status: int = 200) -> None:
         self.status = status
         self.requests: list[dict] = []
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
-            def do_POST(self):  # noqa: N802
+            def do_POST(self):
                 body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
                 outer.requests.append({"headers": dict(self.headers), "body": body})
                 self.send_response(outer.status)
@@ -53,7 +49,7 @@ def receiver():
     r.close()
 
 
-def test_crud_validacao_e_papeis(client):  # noqa: F811
+def test_crud_validacao_e_papeis(client):
     admin = auth(client)
     r = client.post("/api/integrations", headers=admin, json={"name": "", "kind": "slack", "url": "ftp://x", "events": []})
     assert r.status_code == 422
@@ -67,7 +63,7 @@ def test_crud_validacao_e_papeis(client):  # noqa: F811
     assert r.status_code == 201, r.text
     created = r.json()
     assert created["has_secret"] and created["events"] == ["run.succeeded", "run.failed"]
-    assert "segredo" not in created["url"]  # a URL aparece mascarada
+    assert "segredo" not in created["url"]
     operator = auth(client, "operador@delco.dev")
     assert client.get("/api/integrations", headers=operator).status_code == 200
     assert client.post("/api/integrations", headers=operator, json={"name": "x", "kind": "slack"}).status_code == 403
@@ -86,7 +82,7 @@ def test_notificacao_assinada_chega_ao_destino(db, scheduler, workers, receiver)
         {"name": "Webhook", "kind": "webhook", "url": receiver.url, "events": ["run.started", "run.succeeded"]},
         user_id=None,
     )
-    integrations.create(  # filtrada por workflow: não deve receber nada
+    integrations.create(
         {"name": "Outro", "kind": "slack", "url": receiver.url, "events": ["run.succeeded"], "workflows": ["outro"]},
         user_id=None,
     )
@@ -137,7 +133,7 @@ def test_destino_fora_do_ar_tenta_de_novo_e_desiste(db, scheduler, receiver):
     assert test.status == "sent" and test.response_code == 200
 
 
-def test_gatilho_por_url_dispara_o_workflow(client, db):  # noqa: F811
+def test_gatilho_por_url_dispara_o_workflow(client, db):
     admin = auth(client)
     assert client.post("/api/integrations", headers=admin, json={"name": "CI", "kind": "trigger", "workflow": "nao_existe"}).status_code == 422
     r = client.post("/api/integrations", headers=admin, json={"name": "CI", "kind": "trigger", "workflow": "linear"})
@@ -156,7 +152,7 @@ def test_gatilho_por_url_dispara_o_workflow(client, db):  # noqa: F811
     assert client.get("/api/runs?q=build", headers=admin).json()["total"] == 1
 
 
-def test_desempenho_proximas_e_exportacao(client, db):  # noqa: F811
+def test_desempenho_proximas_e_exportacao(client, db):
     from delco.seed import seed_history
 
     seed_history()

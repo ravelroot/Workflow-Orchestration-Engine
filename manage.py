@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-"""Utilitário de linha de comando do Django (o comando `delco` faz o mesmo de forma mais curta)."""
 
 import os
 import sys

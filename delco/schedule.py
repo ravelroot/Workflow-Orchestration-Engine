@@ -1,5 +1,3 @@
-"""Expressões cron, fuso horário, espera entre tentativas e descrição em português."""
-
 from __future__ import annotations
 
 import random
@@ -46,14 +44,12 @@ def validate_timezone(name: str) -> ZoneInfo:
 
 
 def next_fire(expr: str, timezone: str, after: datetime) -> datetime:
-    """Próximo horário (com fuso) estritamente depois de ``after``."""
     tz = ZoneInfo(timezone)
     base = after.astimezone(tz)
     return croniter(normalize_cron(expr), base).get_next(datetime)
 
 
 def retry_delay(attempt: int, base: float, backoff: float, maximum: float, *, jitter: float = 0.1) -> float:
-    """Espera exponencial com variação aleatória: base * backoff^(tentativa-1)."""
     delay = min(maximum, base * (backoff ** max(0, attempt - 1)))
     if jitter and delay > 0:
         delay *= 1 + random.uniform(-jitter, jitter)
@@ -64,8 +60,11 @@ def _hhmm(h: str, m: str) -> str:
     return f"{int(h):02d}:{int(m):02d}"
 
 
+def _every(field: str) -> bool:
+    return field.startswith("*/") and field[2:].isdigit()
+
+
 def describe(expr: str | None) -> str:
-    """Texto curto em português para as expressões mais comuns."""
     if not expr:
         return "Somente manual"
     cron = normalize_cron(expr)
@@ -73,16 +72,15 @@ def describe(expr: str | None) -> str:
     if len(parts) != 5:
         return expr
     minute, hour, dom, month, dow = parts
-    every = lambda field: field.startswith("*/") and field[2:].isdigit()  # noqa: E731
     try:
         if cron == "* * * * *":
             return "A cada minuto"
-        if every(minute) and hour == dom == month == dow == "*":
+        if _every(minute) and hour == dom == month == dow == "*":
             n = int(minute[2:])
             return "A cada minuto" if n == 1 else f"A cada {n} minutos"
         if minute.isdigit() and hour == "*" and dom == month == dow == "*":
             return "De hora em hora" if minute == "0" else f"De hora em hora, no minuto {int(minute)}"
-        if minute.isdigit() and every(hour) and dom == month == dow == "*":
+        if minute.isdigit() and _every(hour) and dom == month == dow == "*":
             return f"A cada {int(hour[2:])} horas"
         if minute.isdigit() and hour.isdigit() and month == "*":
             at = _hhmm(hour, minute)

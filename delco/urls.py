@@ -1,5 +1,3 @@
-"""Rotas: API REST em /api/, documentação em /api/docs e o painel (WhiteNoise) na raiz."""
-
 from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularJSONAPIView, SpectacularSwaggerSplitView
 

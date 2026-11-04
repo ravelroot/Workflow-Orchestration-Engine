@@ -9,10 +9,13 @@ fi
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  senha=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)
-  sed -i.bak -e "s|^DELCO_DB_PASSWORD=.*|DELCO_DB_PASSWORD=${senha}|" .env
+  segredo() { head -c 96 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
+  sed -i.bak \
+    -e "s|^DELCO_DB_PASSWORD=.*|DELCO_DB_PASSWORD=$(segredo 40)|" \
+    -e "s|^DELCO_SECRET_KEY=.*|DELCO_SECRET_KEY=$(segredo 60)|" \
+    -e "s|^DELCO_METRICS_TOKEN=.*|DELCO_METRICS_TOKEN=$(segredo 40)|" .env
   rm -f .env.bak
-  echo "Arquivo .env criado com uma senha aleatória para o MySQL."
+  echo "Arquivo .env criado com senha do MySQL, chave secreta e token de métricas aleatórios."
 fi
 
 docker compose up -d --build

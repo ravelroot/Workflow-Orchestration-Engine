@@ -1,5 +1,3 @@
-"""Ponto de entrada WSGI (só HTTP, sem WebSocket). Útil para testes e servidores WSGI."""
-
 import os
 
 from django.core.wsgi import get_wsgi_application

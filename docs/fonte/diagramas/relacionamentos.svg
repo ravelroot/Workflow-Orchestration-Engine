@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="1095pt" height="564pt"
+ viewBox="0.00 0.00 1094.56 564.30" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(14.4 549.9)">
+<title>er</title>
+<g id="node1" class="node">
+<title>users</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="773.76,-326.5 773.76,-404.5 877.76,-404.5 877.76,-326.5 773.76,-326.5"/>
+<polygon fill="#1f292f" stroke="transparent" points="774.76,-387.5 774.76,-403.5 876.76,-403.5 876.76,-387.5 774.76,-387.5"/>
+<text text-anchor="start" x="777.76" y="-394.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">users</text>
+<text text-anchor="start" x="777.76" y="-378.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="833.76" y="-378.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="777.76" y="-363.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">email</text>
+<text text-anchor="start" x="833.76" y="-363.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar UK</text>
+<text text-anchor="start" x="777.76" y="-348.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">role</text>
+<text text-anchor="start" x="833.76" y="-348.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="777.76" y="-333.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">preferences</text>
+<text text-anchor="start" x="833.76" y="-333.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">json</text>
+<polygon fill="none" stroke="#d6cbc5" points="773.76,-326.5 773.76,-404.5 877.76,-404.5 877.76,-326.5 773.76,-326.5"/>
+</g>
+<g id="node2" class="node">
+<title>api_tokens</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="577.76,-354.5 577.76,-432.5 670.76,-432.5 670.76,-354.5 577.76,-354.5"/>
+<polygon fill="#1f292f" stroke="transparent" points="579.26,-415.5 579.26,-431.5 670.26,-431.5 670.26,-415.5 579.26,-415.5"/>
+<text text-anchor="start" x="582.26" y="-422.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">api_tokens</text>
+<text text-anchor="start" x="582.26" y="-406.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="634.26" y="-406.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="582.26" y="-391.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">user_id</text>
+<text text-anchor="start" x="634.26" y="-391.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="582.26" y="-376.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">kind</text>
+<text text-anchor="start" x="634.26" y="-376.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="582.26" y="-361.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">token_hash</text>
+<text text-anchor="start" x="634.26" y="-361.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">char UK</text>
+<polygon fill="none" stroke="#d6cbc5" points="577.76,-354.5 577.76,-432.5 670.76,-432.5 670.76,-354.5 577.76,-354.5"/>
+</g>
+<g id="edge1" class="edge">
+<title>api_tokens:user_id&#45;&gt;users:id</title>
+<path fill="none" stroke="#8a9eab" d="M578.26,-392.5C569.82,-392.5 573.21,-360.39 579.26,-354.5 608.4,-326.13 630.41,-349.49 670.76,-354.5 715.15,-360.02 725.5,-378.41 766.6,-380.34"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="766.71,-382.79 773.76,-380.5 766.82,-377.89 766.71,-382.79"/>
+<text text-anchor="middle" x="719.76" y="-378.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="node3" class="node">
+<title>audit_log</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="584.76,-457.5 584.76,-535.5 663.76,-535.5 663.76,-457.5 584.76,-457.5"/>
+<polygon fill="#1f292f" stroke="transparent" points="586.26,-518.5 586.26,-534.5 663.26,-534.5 663.26,-518.5 586.26,-518.5"/>
+<text text-anchor="start" x="589.26" y="-525.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">audit_log</text>
+<text text-anchor="start" x="589.26" y="-509.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="627.26" y="-509.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="589.26" y="-494.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">user_id</text>
+<text text-anchor="start" x="627.26" y="-494.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="589.26" y="-479.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">action</text>
+<text text-anchor="start" x="627.26" y="-479.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="589.26" y="-464.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">target</text>
+<text text-anchor="start" x="627.26" y="-464.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<polygon fill="none" stroke="#d6cbc5" points="584.76,-457.5 584.76,-535.5 663.76,-535.5 663.76,-457.5 584.76,-457.5"/>
+</g>
+<g id="edge2" class="edge">
+<title>audit_log:user_id&#45;&gt;users:id</title>
+<path fill="none" stroke="#8a9eab" d="M585.26,-495.5C576.82,-495.5 580.59,-463.76 586.26,-457.5 600.62,-441.65 661.82,-453.24 681.76,-445.5 726.07,-428.31 724.05,-385.19 766.55,-380.85"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="766.89,-383.29 773.76,-380.5 766.65,-378.39 766.89,-383.29"/>
+<text text-anchor="middle" x="719.76" y="-437.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SET NULL</text>
+</g>
+<g id="node4" class="node">
+<title>workflows</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="757.76,-195 757.76,-288 893.76,-288 893.76,-195 757.76,-195"/>
+<polygon fill="#000000" stroke="transparent" points="758.76,-270.5 758.76,-286.5 892.76,-286.5 892.76,-270.5 758.76,-270.5"/>
+<text text-anchor="start" x="761.76" y="-277.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">workflows</text>
+<text text-anchor="start" x="761.76" y="-261.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="849.76" y="-261.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="761.76" y="-246.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">name</text>
+<text text-anchor="start" x="849.76" y="-246.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar UK</text>
+<text text-anchor="start" x="761.76" y="-231.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">current_version_id</text>
+<text text-anchor="start" x="849.76" y="-231.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="761.76" y="-216.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">params_schema</text>
+<text text-anchor="start" x="849.76" y="-216.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">json</text>
+<text text-anchor="start" x="761.76" y="-201.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">source_code</text>
+<text text-anchor="start" x="849.76" y="-201.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">longtext</text>
+<polygon fill="none" stroke="#d6cbc5" points="757.76,-195 757.76,-288 893.76,-288 893.76,-195 757.76,-195"/>
+</g>
+<g id="node5" class="node">
+<title>workflow_versions</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="967.76,-167.5 967.76,-245.5 1065.76,-245.5 1065.76,-167.5 967.76,-167.5"/>
+<polygon fill="#1f292f" stroke="transparent" points="968.76,-228.5 968.76,-244.5 1064.76,-244.5 1064.76,-228.5 968.76,-228.5"/>
+<text text-anchor="start" x="971.76" y="-235.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">workflow_versions</text>
+<text text-anchor="start" x="971.76" y="-219.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="1027.76" y="-219.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="971.76" y="-204.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">workflow_id</text>
+<text text-anchor="start" x="1027.76" y="-204.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="971.76" y="-189.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">version</text>
+<text text-anchor="start" x="1027.76" y="-189.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">int</text>
+<text text-anchor="start" x="971.76" y="-174.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">graph</text>
+<text text-anchor="start" x="1027.76" y="-174.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">json</text>
+<polygon fill="none" stroke="#d6cbc5" points="967.76,-167.5 967.76,-245.5 1065.76,-245.5 1065.76,-167.5 967.76,-167.5"/>
+</g>
+<g id="edge4" class="edge">
+<title>workflows:current_version_id&#45;&gt;workflow_versions:id</title>
+<path fill="none" stroke="#8a9eab" d="M757.76,-232.5C749.43,-232.5 752.79,-200.82 758.76,-195 780.26,-174.07 866.44,-182.63 893.76,-195 904.81,-200 901,-209.92 911.76,-215.5 931.73,-225.85 940.82,-222.45 960.61,-221.65"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="960.82,-224.09 967.76,-221.5 960.72,-219.19 960.82,-224.09"/>
+</g>
+<g id="edge3" class="edge">
+<title>workflow_versions:workflow_id&#45;&gt;workflows:id</title>
+<path fill="none" stroke="#8a9eab" d="M967.76,-205.5C942.87,-205.5 931.03,-190.74 911.76,-206.5 883.05,-229.99 922.69,-264.77 893.76,-288 870.38,-306.79 780.41,-308.78 758.76,-288 753.24,-282.69 749.6,-272.74 751.72,-267.29"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="753.14,-269.29 757.76,-263.5 750.53,-265.14 753.14,-269.29"/>
+<text text-anchor="middle" x="930.76" y="-209.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="node6" class="node">
+<title>workflow_runs</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="566.76,-88 566.76,-211 681.76,-211 681.76,-88 566.76,-88"/>
+<polygon fill="#000000" stroke="transparent" points="568.26,-193.5 568.26,-209.5 681.26,-209.5 681.26,-193.5 568.26,-193.5"/>
+<text text-anchor="start" x="571.26" y="-200.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">workflow_runs</text>
+<text text-anchor="start" x="571.26" y="-184.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="645.26" y="-184.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="571.26" y="-169.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">workflow_id</text>
+<text text-anchor="start" x="645.26" y="-169.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="571.26" y="-154.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">version_id</text>
+<text text-anchor="start" x="645.26" y="-154.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="571.26" y="-139.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">triggered_by_id</text>
+<text text-anchor="start" x="645.26" y="-139.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="571.26" y="-124.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">status</text>
+<text text-anchor="start" x="645.26" y="-124.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="571.26" y="-109.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">trigger</text>
+<text text-anchor="start" x="645.26" y="-109.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="571.26" y="-94.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">error</text>
+<text text-anchor="start" x="645.26" y="-94.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">longtext</text>
+<polygon fill="none" stroke="#d6cbc5" points="566.76,-88 566.76,-211 681.76,-211 681.76,-88 566.76,-88"/>
+</g>
+<g id="edge7" class="edge">
+<title>workflow_runs:triggered_by_id&#45;&gt;users:id</title>
+<path fill="none" stroke="#8a9eab" d="M567.26,-140.5C555.6,-140.5 559.94,-96.17 568.26,-88 586.27,-70.34 662.22,-72.06 681.76,-88 712.54,-113.09 680.71,-140.67 699.76,-175.5 711.68,-197.28 727.86,-192.71 739.76,-214.5 756.55,-245.22 738.97,-362.3 766.67,-378.61"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="766.37,-381.07 773.76,-380.5 767.63,-376.33 766.37,-381.07"/>
+<text text-anchor="middle" x="719.76" y="-217.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SET NULL</text>
+</g>
+<g id="edge5" class="edge">
+<title>workflow_runs:workflow_id&#45;&gt;workflows:id</title>
+<path fill="none" stroke="#8a9eab" d="M567.26,-171.5C558.48,-171.5 562.35,-204.51 568.26,-211 585.37,-229.78 657.28,-217.73 681.76,-224.5 708.99,-232.03 715.3,-236.38 739.76,-250.5 745.64,-253.89 747.28,-258.76 750.94,-261.48"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="750.36,-263.86 757.76,-263.5 751.75,-259.16 750.36,-263.86"/>
+<text text-anchor="middle" x="719.76" y="-253.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="edge6" class="edge">
+<title>workflow_runs:version_id&#45;&gt;workflow_versions:id</title>
+<path fill="none" stroke="#8a9eab" d="M567.26,-156.5C555.15,-156.5 559.62,-202.51 568.26,-211 586.26,-228.67 660.42,-224.43 681.76,-211 697.41,-201.15 684.12,-183.35 699.76,-173.5 714.41,-164.29 703.23,-160 893.76,-182.5 918.87,-185.46 928.84,-178.31 949.76,-192.5 959.57,-199.15 955.78,-213.11 960.89,-218.9"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="960.35,-221.31 967.76,-221.5 962.08,-216.73 960.35,-221.31"/>
+</g>
+<g id="node7" class="node">
+<title>task_instances</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="384.76,-73 384.76,-166 472.76,-166 472.76,-73 384.76,-73"/>
+<polygon fill="#1f292f" stroke="transparent" points="385.76,-148.5 385.76,-164.5 471.76,-164.5 471.76,-148.5 385.76,-148.5"/>
+<text text-anchor="start" x="388.76" y="-155.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">task_instances</text>
+<text text-anchor="start" x="388.76" y="-139.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="435.76" y="-139.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="388.76" y="-124.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">run_id</text>
+<text text-anchor="start" x="435.76" y="-124.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="388.76" y="-109.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">worker_id</text>
+<text text-anchor="start" x="435.76" y="-109.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="388.76" y="-94.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">task_name</text>
+<text text-anchor="start" x="435.76" y="-94.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="388.76" y="-79.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">status</text>
+<text text-anchor="start" x="435.76" y="-79.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<polygon fill="none" stroke="#d6cbc5" points="384.76,-73 384.76,-166 472.76,-166 472.76,-73 384.76,-73"/>
+</g>
+<g id="edge8" class="edge">
+<title>task_instances:run_id&#45;&gt;workflow_runs:id</title>
+<path fill="none" stroke="#8a9eab" d="M384.76,-126.5C375.98,-126.5 379.68,-159.67 385.76,-166 436.09,-218.32 479,-156.44 548.76,-176.5 554.66,-178.19 556.76,-181.97 560.15,-184.37"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="559.86,-186.84 567.26,-186.5 561.26,-182.14 559.86,-186.84"/>
+<text text-anchor="middle" x="528.76" y="-179.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="node10" class="node">
+<title>workers</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="572.26,0 572.26,-63 676.26,-63 676.26,0 572.26,0"/>
+<polygon fill="#1f292f" stroke="transparent" points="573.26,-45.5 573.26,-61.5 675.26,-61.5 675.26,-45.5 573.26,-45.5"/>
+<text text-anchor="start" x="576.26" y="-52.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">workers</text>
+<text text-anchor="start" x="576.26" y="-36.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="632.26" y="-36.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar PK</text>
+<text text-anchor="start" x="576.26" y="-21.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">status</text>
+<text text-anchor="start" x="632.26" y="-21.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="576.26" y="-6.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">concurrency</text>
+<text text-anchor="start" x="632.26" y="-6.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">int</text>
+<polygon fill="none" stroke="#d6cbc5" points="572.26,0 572.26,-63 676.26,-63 676.26,0 572.26,0"/>
+</g>
+<g id="edge9" class="edge">
+<title>task_instances:worker_id&#45;&gt;workers:id</title>
+<path fill="none" stroke="#8a9eab" d="M384.76,-110.5C376.43,-110.5 380.07,-79.09 385.76,-73 410.6,-46.41 515.07,-71.24 548.76,-57.5 558.48,-53.54 559.16,-44.17 565.4,-40.26"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="566.09,-42.61 572.26,-38.5 564.88,-37.87 566.09,-42.61"/>
+<text text-anchor="middle" x="528.76" y="-65.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SET NULL</text>
+</g>
+<g id="node8" class="node">
+<title>task_attempts</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="172.76,-29.5 172.76,-107.5 292.76,-107.5 292.76,-29.5 172.76,-29.5"/>
+<polygon fill="#1f292f" stroke="transparent" points="173.76,-90.5 173.76,-106.5 291.76,-106.5 291.76,-90.5 173.76,-90.5"/>
+<text text-anchor="start" x="176.76" y="-97.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">task_attempts</text>
+<text text-anchor="start" x="176.76" y="-81.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="255.76" y="-81.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="176.76" y="-66.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">task_instance_id</text>
+<text text-anchor="start" x="255.76" y="-66.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="176.76" y="-51.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">worker_id</text>
+<text text-anchor="start" x="255.76" y="-51.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="176.76" y="-36.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">number</text>
+<text text-anchor="start" x="255.76" y="-36.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">int</text>
+<polygon fill="none" stroke="#d6cbc5" points="172.76,-29.5 172.76,-107.5 292.76,-107.5 292.76,-29.5 172.76,-29.5"/>
+</g>
+<g id="edge10" class="edge">
+<title>task_attempts:task_instance_id&#45;&gt;task_instances:id</title>
+<path fill="none" stroke="#8a9eab" d="M172.76,-67.5C164.32,-67.5 167.71,-35.39 173.76,-29.5 211.65,7.4 246.34,-4.16 292.76,-29.5 305.75,-36.59 301.85,-45.69 310.76,-57.5 339.22,-95.19 335.5,-137.01 377.6,-141.16"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="377.66,-143.62 384.76,-141.5 377.89,-138.72 377.66,-143.62"/>
+<text text-anchor="middle" x="329.76" y="-128.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="edge11" class="edge">
+<title>task_attempts:worker_id&#45;&gt;workers:id</title>
+<path fill="none" stroke="#8a9eab" d="M172.76,-52.5C162.53,-52.5 166.37,-36.58 173.76,-29.5 211.97,7.08 239.88,-28.65 292.76,-29.5 414.61,-31.46 446.73,-38.23 565.09,-38.49"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="565.26,-40.94 572.26,-38.5 565.27,-36.04 565.26,-40.94"/>
+<text text-anchor="middle" x="428.76" y="-40.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SET NULL</text>
+</g>
+<g id="node9" class="node">
+<title>task_logs</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="5.76,-61 5.76,-124 98.76,-124 98.76,-61 5.76,-61"/>
+<polygon fill="#1f292f" stroke="transparent" points="7.26,-106.5 7.26,-122.5 98.26,-122.5 98.26,-106.5 7.26,-106.5"/>
+<text text-anchor="start" x="10.26" y="-113.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">task_logs</text>
+<text text-anchor="start" x="10.26" y="-97.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="62.26" y="-97.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="10.26" y="-82.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">attempt_id</text>
+<text text-anchor="start" x="62.26" y="-82.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="10.26" y="-67.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">level</text>
+<text text-anchor="start" x="62.26" y="-67.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<polygon fill="none" stroke="#d6cbc5" points="5.76,-61 5.76,-124 98.76,-124 98.76,-61 5.76,-61"/>
+</g>
+<g id="edge12" class="edge">
+<title>task_logs:attempt_id&#45;&gt;task_attempts:id</title>
+<path fill="none" stroke="#8a9eab" d="M6.26,-83.5C-3.75,-83.5 0.03,-67.92 7.26,-61 36.65,-32.89 58.54,-55.02 98.76,-61 130.24,-65.68 137.4,-80.98 165.56,-83.22"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="165.68,-85.68 172.76,-83.5 165.86,-80.78 165.68,-85.68"/>
+<text text-anchor="middle" x="135.76" y="-83.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="node11" class="node">
+<title>integrations</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="571.26,-236 571.26,-329 677.26,-329 677.26,-236 571.26,-236"/>
+<polygon fill="#1f292f" stroke="transparent" points="572.26,-311.5 572.26,-327.5 676.26,-327.5 676.26,-311.5 572.26,-311.5"/>
+<text text-anchor="start" x="575.26" y="-318.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">integrations</text>
+<text text-anchor="start" x="575.26" y="-302.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="640.26" y="-302.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="575.26" y="-287.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">workflow_id</text>
+<text text-anchor="start" x="640.26" y="-287.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="575.26" y="-272.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">created_by_id</text>
+<text text-anchor="start" x="640.26" y="-272.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="575.26" y="-257.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">kind</text>
+<text text-anchor="start" x="640.26" y="-257.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<text text-anchor="start" x="575.26" y="-242.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">config</text>
+<text text-anchor="start" x="640.26" y="-242.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">json</text>
+<polygon fill="none" stroke="#d6cbc5" points="571.26,-236 571.26,-329 677.26,-329 677.26,-236 571.26,-236"/>
+</g>
+<g id="edge14" class="edge">
+<title>integrations:created_by_id&#45;&gt;users:id</title>
+<path fill="none" stroke="#8a9eab" d="M571.26,-273.5C562.93,-273.5 566.29,-241.82 572.26,-236 588.98,-219.72 658.56,-222.05 677.26,-236 705.34,-256.93 680.64,-282.17 699.76,-311.5 712.51,-331.04 722.73,-329.56 739.76,-345.5 753.62,-358.47 752.66,-375.54 766.73,-379.6"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="766.51,-382.05 773.76,-380.5 767.13,-377.19 766.51,-382.05"/>
+<text text-anchor="middle" x="719.76" y="-348.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">SET NULL</text>
+</g>
+<g id="edge13" class="edge">
+<title>integrations:workflow_id&#45;&gt;workflows:id</title>
+<path fill="none" stroke="#8a9eab" d="M571.26,-289.5C562.48,-289.5 565.98,-322.87 572.26,-329 588.97,-345.29 656.27,-339.18 677.26,-329 691.79,-321.96 687.79,-311.32 699.76,-300.5 720.58,-281.67 726.29,-266.23 750.74,-263.83"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="750.89,-266.27 757.76,-263.5 750.66,-261.38 750.89,-266.27"/>
+<text text-anchor="middle" x="719.76" y="-303.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="node12" class="node">
+<title>integration_deliveries</title>
+<polygon fill="#fdfbfa" stroke="transparent" points="366.76,-228.5 366.76,-306.5 490.76,-306.5 490.76,-228.5 366.76,-228.5"/>
+<polygon fill="#1f292f" stroke="transparent" points="367.76,-289.5 367.76,-305.5 489.76,-305.5 489.76,-289.5 367.76,-289.5"/>
+<text text-anchor="start" x="370.76" y="-296.3" font-family="Courier,monospace" font-weight="bold" font-size="9.00" fill="#ffffff">integration_deliveries</text>
+<text text-anchor="start" x="370.76" y="-280.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">id</text>
+<text text-anchor="start" x="446.76" y="-280.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">bigint PK</text>
+<text text-anchor="start" x="370.76" y="-265.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">integration_id</text>
+<text text-anchor="start" x="446.76" y="-265.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="370.76" y="-250.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">run_id</text>
+<text text-anchor="start" x="446.76" y="-250.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">FK</text>
+<text text-anchor="start" x="370.76" y="-235.1" font-family="Courier,monospace" font-size="8.00" fill="#1f292f">status</text>
+<text text-anchor="start" x="446.76" y="-235.4" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#65695b">varchar</text>
+<polygon fill="none" stroke="#d6cbc5" points="366.76,-228.5 366.76,-306.5 490.76,-306.5 490.76,-228.5 366.76,-228.5"/>
+</g>
+<g id="edge16" class="edge">
+<title>integration_deliveries:run_id&#45;&gt;workflow_runs:id</title>
+<path fill="none" stroke="#8a9eab" d="M366.76,-251.5C356.53,-251.5 361.15,-236.3 367.76,-228.5 381.33,-212.51 521.35,-190.13 560.03,-186.9"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="560.41,-189.33 567.26,-186.5 560.14,-184.44 560.41,-189.33"/>
+<text text-anchor="middle" x="528.76" y="-195.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+<g id="edge15" class="edge">
+<title>integration_deliveries:integration_id&#45;&gt;integrations:id</title>
+<path fill="none" stroke="#8a9eab" d="M366.76,-266.5C358.32,-266.5 361.71,-234.39 367.76,-228.5 406.93,-190.36 439.96,-208.31 490.76,-228.5 534.17,-245.75 523.37,-298.73 564.24,-304.07"/>
+<polygon fill="#8a9eab" stroke="#8a9eab" points="564.13,-306.51 571.26,-304.5 564.43,-301.62 564.13,-306.51"/>
+<text text-anchor="middle" x="528.76" y="-300.1" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#65695b">CASCADE</text>
+</g>
+</g>
+</svg>

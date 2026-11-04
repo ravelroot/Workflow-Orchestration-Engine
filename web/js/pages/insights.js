@@ -1,4 +1,3 @@
-// Desempenho: saúde de cada workflow no período, tarefas que mais falham e as mais lentas.
 import { get } from "../api.js";
 import { clear, debounce, duration, empty, h, int, rateClass } from "../ui.js";
 import { dailySpark } from "../viz.js";

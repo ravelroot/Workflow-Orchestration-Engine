@@ -1,0 +1,13 @@
+digraph entrega {
+rankdir=LR;
+graph [fontname="Helvetica", bgcolor="transparent", pad="0.2", nodesep="0.35", ranksep="0.5"];
+node [fontname="Helvetica", fontsize=10, color="#d6cbc5", fontcolor="#1f292f"];
+edge [fontname="Helvetica", fontsize=8, color="#8a9eab", fontcolor="#65695b", arrowsize=0.7];
+pending [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#d9c3b6", penwidth=2, label=<<font face="Courier" point-size="9">pending</font>>];
+sent [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#9ca38e", penwidth=2, label=<<font face="Courier" point-size="9">sent</font>>];
+failed [shape=box, style="rounded,filled", fillcolor="#fdfbfa", color="#a04e3c", penwidth=2, label=<<font face="Courier" point-size="9">failed</font>>];
+pending -> sent [label="2xx"];
+pending -> pending [label="erro: 10, 20,\n40 e 80 s"];
+pending -> failed [label="5ª falha"];
+failed -> pending [label="reenviar"];
+}

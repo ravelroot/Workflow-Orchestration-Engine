@@ -1,5 +1,3 @@
-"""Autenticação por token (``Authorization: Bearer``) e permissões por papel no Django REST Framework."""
-
 from __future__ import annotations
 
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
@@ -11,8 +9,6 @@ from .. import accounts
 
 
 class BearerTokenAuthentication(BaseAuthentication):
-    """Aceita o token de sessão do painel ou um token pessoal (``dlc_…``)."""
-
     keyword = "bearer"
 
     def authenticate(self, request):
@@ -57,8 +53,6 @@ class IsAdmin(_Role):
 
 
 class BearerTokenScheme(OpenApiAuthenticationExtension):
-    """Descreve a autenticação por token no OpenAPI (botão Authorize do Swagger)."""
-
     target_class = "delco.api.auth.BearerTokenAuthentication"
     name = "bearer"
 

@@ -2,7 +2,7 @@ name: delco
 
 x-delco: &delco
   build: .
-  image: delco:1.1.0
+  image: delco:1.2.0
   restart: unless-stopped
   init: true
   environment: &delco-env
@@ -17,6 +17,16 @@ x-delco: &delco
     DELCO_SECRET_KEY: ${DELCO_SECRET_KEY:-}
     DELCO_PUBLIC_URL: ${DELCO_PUBLIC_URL:-http://localhost:8080}
     DELCO_WEBHOOK_TIMEOUT: ${DELCO_WEBHOOK_TIMEOUT:-10}
+    DELCO_LOG_FORMAT: ${DELCO_LOG_FORMAT:-text}
+    DELCO_HOOK_RATE_LIMIT: ${DELCO_HOOK_RATE_LIMIT:-60}
+    DELCO_LOGIN_RATE_LIMIT: ${DELCO_LOGIN_RATE_LIMIT:-30}
+    DELCO_METRICS_TOKEN: ${DELCO_METRICS_TOKEN:-}
+    DELCO_SMTP_HOST: ${DELCO_SMTP_HOST:-}
+    DELCO_SMTP_PORT: ${DELCO_SMTP_PORT:-587}
+    DELCO_SMTP_USER: ${DELCO_SMTP_USER:-}
+    DELCO_SMTP_PASSWORD: ${DELCO_SMTP_PASSWORD:-}
+    DELCO_SMTP_FROM: ${DELCO_SMTP_FROM:-Delco <delco@localhost>}
+    DELCO_SMTP_SECURITY: ${DELCO_SMTP_SECURITY:-starttls}
   depends_on: &delco-deps
     mysql:
       condition: service_healthy
@@ -57,31 +67,34 @@ services:
       timeout: 3s
       retries: 12
 
-  # Django no Daphne: API REST (DRF) + WebSocket (Channels) + painel web. Aplica as migrações ao subir.
   api:
     <<: *delco
     command: ["delco", "api", "--port", "8000"]
     ports:
       - "${DELCO_PORT:-8080}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      test: ["CMD", "delco", "healthcheck", "api"]
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 10s
 
-  # Agendador: lê a pasta workflows/, cria execuções, libera tarefas e recupera falhas.
   scheduler:
     <<: *delco
     command: ["delco", "scheduler"]
     volumes:
       - ./workflows:/app/workflows:ro
+    healthcheck:
+      test: ["CMD", "delco", "healthcheck", "scheduler"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
     depends_on:
       <<: *delco-deps
       api:
         condition: service_healthy
 
-  # Workers: consomem as filas e executam as tarefas. Escale com --scale worker=N.
   worker:
     <<: *delco
     command: ["delco", "worker"]
@@ -91,6 +104,12 @@ services:
       DELCO_WORKER_CONCURRENCY: ${DELCO_WORKER_CONCURRENCY:-4}
     volumes:
       - ./workflows:/app/workflows:ro
+    healthcheck:
+      test: ["CMD", "delco", "healthcheck", "worker"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
     deploy:
       replicas: 2
     stop_grace_period: 45s

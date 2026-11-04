@@ -53,7 +53,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libmysqlclient-dev
       - run: pip install -r requirements-dev.txt
       - run: pip install --no-deps -e .
+      - name: Ruff
+        run: ruff check .
+      - name: Painel · sintaxe do JavaScript
+        run: for f in web/js/*.js web/js/pages/*.js; do node --check "$f"; done
       - run: delco validate workflows
+      - name: Workflows de exemplo rodando localmente
+        run: |
+          delco dev run ola_delco --quiet
+          delco dev run relatorio_vendas_diario --quiet -p pasta_saida=/tmp/delco-ci
       - run: python manage.py check
         env:
           DELCO_DATABASE_URL: mysql://delco:delco@127.0.0.1:3306/delco_test
@@ -71,3 +79,8 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config -q
       - run: docker compose build
+      - name: Imagem responde aos comandos
+        run: |
+          docker run --rm delco:1.2.0 delco --version
+          docker run --rm delco:1.2.0 delco validate workflows
+          docker run --rm delco:1.2.0 delco dev run ola_delco --quiet
