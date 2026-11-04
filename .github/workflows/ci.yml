@@ -44,7 +44,7 @@ jobs:
       DELCO_TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
