@@ -1,11 +1,11 @@
-FROM python:3.13-slim AS build
+FROM python:3.15-slim AS build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential pkg-config default-libmysqlclient-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
-FROM python:3.13-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
