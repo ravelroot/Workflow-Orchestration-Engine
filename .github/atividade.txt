@@ -1,4 +1,3 @@
-2026-10-24 1º turno 08:52 (Brasília)
 2026-10-24 2º turno 16:26 (Brasília)
 2026-10-25 1º turno 08:50 (Brasília)
 2026-10-25 2º turno 16:27 (Brasília)
@@ -58,3 +57,4 @@
 2026-11-25 1º turno 17:32 (Brasília)
 2026-11-26 1º turno 17:20 (Brasília)
 2026-11-26 2º turno 23:08 (Brasília)
+2026-11-27 2º turno 00:00 (Brasília)
